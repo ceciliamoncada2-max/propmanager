@@ -26,6 +26,7 @@ export default function Inspections() {
   const [importTenantId, setImportTenantId] = useState(filterTenantId || "");
   const [importType, setImportType] = useState("move_out");
   const [importDate, setImportDate] = useState(new Date().toISOString().split("T")[0]);
+  const [importInspector, setImportInspector] = useState("");
 
   const { data: inspections = [], isLoading } = useQuery<any[]>({
     queryKey: ["/api/inspections", filterTenantId],
@@ -84,6 +85,7 @@ export default function Inspections() {
       propertyId: tenant?.propertyId,
       type: importType,
       inspectionDate: importDate,
+      inspectorName: importInspector,
       items,
     });
   }
@@ -159,6 +161,7 @@ export default function Inspections() {
                           insp.type === "exterior" ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300" :
                           insp.type === "periodic" ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300" :
                           insp.type === "quick_condition" ? "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300" :
+                          insp.type === "annual" ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300" :
                           "bg-muted text-muted-foreground"
                         }`}>
                           {insp.type === "move_in" ? "Move-In" :
@@ -167,6 +170,7 @@ export default function Inspections() {
                            insp.type === "exterior" ? "Exterior" :
                            insp.type === "periodic" ? "Periodic" :
                            insp.type === "quick_condition" ? "Quick Condition Check" :
+                           insp.type === "annual" ? "Annual" :
                            insp.type}
                         </span>
                         {insp.importedFrom === "rentcheck" && <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded-full">RentCheck</span>}
@@ -211,6 +215,7 @@ export default function Inspections() {
                     <SelectItem value="exterior">Exterior</SelectItem>
                     <SelectItem value="periodic">Periodic</SelectItem>
                     <SelectItem value="quick_condition">Quick Condition Check</SelectItem>
+                    <SelectItem value="annual">Annual</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -255,13 +260,20 @@ export default function Inspections() {
                     <SelectItem value="exterior">Exterior</SelectItem>
                     <SelectItem value="periodic">Periodic</SelectItem>
                     <SelectItem value="quick_condition">Quick Condition Check</SelectItem>
+                    <SelectItem value="annual">Annual</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
-            <div>
-              <Label>Inspection Date</Label>
-              <Input type="date" value={importDate} onChange={e => setImportDate(e.target.value)} />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Inspection Date</Label>
+                <Input type="date" value={importDate} onChange={e => setImportDate(e.target.value)} />
+              </div>
+              <div>
+                <Label>Completed By</Label>
+                <Input value={importInspector} onChange={e => setImportInspector(e.target.value)} placeholder="Inspector name" data-testid="input-import-inspector" />
+              </div>
             </div>
             <div>
               <Label>Paste RentCheck Report Data</Label>

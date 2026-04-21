@@ -1,11 +1,14 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Save, DollarSign, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Save, DollarSign, AlertTriangle, CheckCircle2, Wrench } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useEffect } from "react";
@@ -13,13 +16,19 @@ import { useState, useEffect } from "react";
 const CONDITIONS = ["E", "G", "F", "P", "N/A"];
 const COND_LABELS: Record<string, string> = { E: "Excellent", G: "Good", F: "Fair", P: "Poor", "N/A": "N/A" };
 
+const MAINT_CATEGORIES = ["Plumbing", "Electrical", "HVAC", "Appliance", "Flooring", "Walls/Paint", "Windows/Doors", "Roof/Exterior", "Pest Control", "General"];
+const MAINT_URGENCY = ["low", "medium", "high", "emergency"];
+
 type ItemEdit = { condition: string; notes: string; hasDamage: boolean; estimatedRepairCost: number; };
+type MaintPrefill = { item: any; area: string; } | null;
 
 export default function InspectionDetail() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
   const [edits, setEdits] = useState<Record<number, ItemEdit>>({});
   const [saving, setSaving] = useState<Set<number>>(new Set());
+  const [maintDialog, setMaintDialog] = useState<MaintPrefill>(null);
+  const [maintForm, setMaintForm] = useState({ category: "General", urgency: "medium", title: "", description: "" });
 
   const { data: inspection } = useQuery<any>({ queryKey: ["/api/inspections", Number(id)], queryFn: async () => { const r = await fetch(`/api/inspections/${id}`); return r.json(); } });
   const { data: items = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/inspections", Number(id), "items"], queryFn: async () => { const r = await fetch(`/api/inspections/${id}/items`); return r.json(); } });
@@ -39,6 +48,41 @@ export default function InspectionDetail() {
     mutationFn: ({ itemId, data }: any) => apiRequest("PATCH", `/api/inspection-items/${itemId}`, data),
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["/api/inspections"] }); },
   });
+
+  const maintMutation = useMutation({
+    mutationFn: (data: any) => apiRequest("POST", "/api/maintenance", data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance"] });
+      setMaintDialog(null);
+      toast({ title: "Maintenance request created", description: "Added to the maintenance queue." });
+    },
+  });
+
+  function openMaintDialog(item: any) {
+    setMaintForm({
+      category: "General",
+      urgency: "medium",
+      title: `${item.area} — ${item.item}`,
+      description: edits[item.id]?.notes || item.notes || "",
+    });
+    setMaintDialog({ item, area: item.area });
+  }
+
+  function submitMaint(e: React.FormEvent) {
+    e.preventDefault();
+    if (!maintDialog || !inspection) return;
+    maintMutation.mutate({
+      tenantId: inspection.tenantId,
+      propertyId: inspection.propertyId,
+      category: maintForm.category,
+      urgency: maintForm.urgency,
+      title: maintForm.title,
+      description: maintForm.description,
+      location: maintDialog.area,
+      submittedAt: new Date().toISOString(),
+      status: "open",
+    });
+  }
 
   function updateEdit(itemId: number, field: keyof ItemEdit, value: any) {
     setEdits(prev => {
@@ -172,6 +216,17 @@ export default function InspectionDetail() {
                           >
                             {isDamaged ? "⚠ Damage" : "No Damage"}
                           </button>
+                          {/* Create maintenance request */}
+                          {(isDamaged || edit.condition === "F" || edit.condition === "P") && (
+                            <button
+                              type="button"
+                              onClick={() => openMaintDialog(item)}
+                              className="px-3 py-1 rounded text-xs font-medium border border-orange-300 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-700 transition-colors flex items-center gap-1"
+                              data-testid={`btn-maint-${item.id}`}
+                            >
+                              <Wrench size={11} /> Maintenance
+                            </button>
+                          )}
                         </div>
                         {/* Notes */}
                         <div className="mt-2">
@@ -193,6 +248,50 @@ export default function InspectionDetail() {
           ))}
         </div>
       )}
+      {/* Create Maintenance Request dialog */}
+      <Dialog open={!!maintDialog} onOpenChange={open => !open && setMaintDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Wrench size={16} /> Create Maintenance Request</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={submitMaint} className="space-y-3">
+            <div>
+              <Label>Title</Label>
+              <Input value={maintForm.title} onChange={e => setMaintForm(f => ({ ...f, title: e.target.value }))} data-testid="input-maint-title" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Category</Label>
+                <Select value={maintForm.category} onValueChange={v => setMaintForm(f => ({ ...f, category: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>{MAINT_CATEGORIES.map(c => <SelectItem key={c} value={c}>{c}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Urgency</Label>
+                <Select value={maintForm.urgency} onValueChange={v => setMaintForm(f => ({ ...f, urgency: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="emergency">Emergency</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Textarea value={maintForm.description} onChange={e => setMaintForm(f => ({ ...f, description: e.target.value }))} rows={3} placeholder="Describe the issue..." data-testid="input-maint-desc" />
+            </div>
+            <p className="text-xs text-muted-foreground">Location: <span className="font-medium">{maintDialog?.area}</span> · Tenant and property pre-filled from this inspection.</p>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setMaintDialog(null)}>Cancel</Button>
+              <Button type="submit" disabled={maintMutation.isPending} data-testid="btn-submit-maint">Create Request</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
