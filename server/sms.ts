@@ -1,5 +1,3 @@
-import twilio from "twilio";
-
 const accountSid = process.env.TWILIO_ACCOUNT_SID;
 const authToken = process.env.TWILIO_AUTH_TOKEN;
 const fromNumber = process.env.TWILIO_PHONE_NUMBER;
@@ -7,6 +5,8 @@ const landlordPhone = process.env.LANDLORD_PHONE;
 
 function getClient() {
   if (!accountSid || !authToken) return null;
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const twilio = require("twilio");
   return twilio(accountSid, authToken);
 }
 
