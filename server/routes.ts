@@ -250,7 +250,12 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     const moveOut = inspList.find(i => i.type === "move_out");
     const items = moveOut ? await storage.getInspectionItems(moveOut.id) : [];
     const maintRequests = await storage.getMaintenanceRequests(undefined, tenantId);
-    const buf = generateDepositTrackerXlsx(tenant, property, deposit, entries, moveOut, items, maintRequests);
+    // Fetch receipt photos for each resolved maintenance request
+    const photoMap: Record<number, any[]> = {};
+    await Promise.all(maintRequests.map(async (mr) => {
+      photoMap[mr.id] = await storage.getMaintenancePhotos(mr.id);
+    }));
+    const buf = generateDepositTrackerXlsx(tenant, property, deposit, entries, moveOut, items, maintRequests, photoMap);
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="deposit-tracker-${tenant.name.replace(/\s+/g, "-")}.xlsx"`);
     res.send(buf);
@@ -378,11 +383,13 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     if (!maint) return res.status(404).json({ error: "Request not found" });
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) return res.status(400).json({ error: "No files uploaded" });
+    const caption = req.body?.caption || null;
     const saved = await Promise.all(files.map(file => storage.createMaintenancePhoto({
       maintenanceRequestId: requestId,
       filename: file.filename,
       originalName: file.originalname,
       uploadedAt: new Date().toISOString(),
+      caption,
     })));
     res.json(saved);
   });

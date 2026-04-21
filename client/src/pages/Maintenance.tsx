@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Wrench, Search, FileText, DollarSign, BookOpen, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Calendar, ThumbsUp, RefreshCw, X, Clock, Camera, ZoomIn } from "lucide-react";
+import { Wrench, Search, FileText, DollarSign, BookOpen, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Calendar, ThumbsUp, RefreshCw, X, Clock, Camera, ZoomIn, Receipt, Image, Trash2, Upload } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { format } from "date-fns";
 import { QBO_EXPENSE_CATEGORIES, DEPOSIT_DECISIONS } from "@shared/schema";
 
@@ -53,6 +53,8 @@ export default function Maintenance() {
   // Resolution section (Phase 2)
   const [showResolution, setShowResolution] = useState(false);
   const [completionCost, setCompletionCost] = useState("");
+  const [partsCost, setPartsCost] = useState("");
+  const [laborCost, setLaborCost] = useState("");
   const [scheduledVisit, setScheduledVisit] = useState("");
   const [contractState, setContractState] = useState("TX");
   const [contractPage, setContractPage] = useState("");
@@ -70,11 +72,13 @@ export default function Maintenance() {
   const [leaseLoading, setLeaseLoading] = useState(false);
   const [suggestedClauses, setSuggestedClauses] = useState<LeaseClause[]>([]);
   const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
+  const [uploadingReceipts, setUploadingReceipts] = useState(false);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   const { data: requests = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/maintenance"] });
   const { data: tenants = [] } = useQuery<any[]>({ queryKey: ["/api/tenants"] });
   const { data: properties = [] } = useQuery<any[]>({ queryKey: ["/api/properties"] });
-  const { data: reqPhotos = [] } = useQuery<any[]>({
+  const { data: allPhotos = [] } = useQuery<any[]>({
     queryKey: ["/api/maintenance", selectedReq?.id, "photos"],
     queryFn: async () => {
       if (!selectedReq?.id) return [];
@@ -83,6 +87,32 @@ export default function Maintenance() {
     },
     enabled: !!selectedReq?.id,
   });
+  const reqPhotos = allPhotos.filter((p: any) => p.caption !== "receipt");
+  const receiptPhotos = allPhotos.filter((p: any) => p.caption === "receipt");
+
+  async function handleReceiptUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files || []);
+    if (!files.length || !selectedReq) return;
+    setUploadingReceipts(true);
+    try {
+      const formData = new FormData();
+      files.forEach(f => formData.append("photos", f));
+      formData.append("caption", "receipt");
+      await fetch(`/api/maintenance/${selectedReq.id}/photos`, { method: "POST", body: formData });
+      queryClient.invalidateQueries({ queryKey: ["/api/maintenance", selectedReq.id, "photos"] });
+      toast({ title: "Receipt uploaded", description: `${files.length} receipt photo${files.length > 1 ? "s" : ""} saved.` });
+    } catch {
+      toast({ title: "Upload failed", variant: "destructive" });
+    } finally {
+      setUploadingReceipts(false);
+      if (receiptInputRef.current) receiptInputRef.current.value = "";
+    }
+  }
+
+  async function deletePhoto(photoId: number) {
+    await fetch(`/api/maintenance/photos/${photoId}`, { method: "DELETE" });
+    queryClient.invalidateQueries({ queryKey: ["/api/maintenance", selectedReq?.id, "photos"] });
+  }
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: any) => apiRequest("PATCH", `/api/maintenance/${id}`, data),
@@ -106,6 +136,8 @@ export default function Maintenance() {
     setNewStatus(r.status);
     setLandlordNotes(r.landlordNotes || "");
     setCompletionCost(r.completionCost != null ? String(r.completionCost) : "");
+    setPartsCost((r as any).partsCost != null ? String((r as any).partsCost) : "");
+    setLaborCost((r as any).laborCost != null ? String((r as any).laborCost) : "");
     setScheduledVisit((r as any).scheduledVisit || "");
     setContractState(r.contractState || "TX");
     setContractPage(r.contractPage || "");
@@ -160,13 +192,17 @@ export default function Maintenance() {
 
   function handleUpdate(e: React.FormEvent) {
     e.preventDefault();
+    const totalCost = (partsCost ? Number(partsCost) : 0) + (laborCost ? Number(laborCost) : 0);
     const payload: any = {
       status: newStatus,
       landlordNotes,
       scheduledVisit: scheduledVisit || null,
+      partsCost: partsCost ? Number(partsCost) : null,
+      laborCost: laborCost ? Number(laborCost) : null,
+      completionCost: totalCost > 0 ? totalCost : (completionCost ? Number(completionCost) : null),
     };
     if (showResolution) {
-      payload.completionCost = completionCost ? Number(completionCost) : null;
+      payload.completionCost = totalCost > 0 ? totalCost : (completionCost ? Number(completionCost) : null);
       payload.contractState = contractState || null;
       payload.contractPage = contractPage || null;
       payload.contractSection = contractSection || null;
@@ -436,28 +472,128 @@ export default function Maintenance() {
                 })()}
               </div>
 
-              {/* Status & basic notes */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label>Status</Label>
-                  <Select value={newStatus} onValueChange={(v) => { setNewStatus(v); if (v === "resolved" || v === "closed") setShowResolution(true); }}>
-                    <SelectTrigger data-testid="select-new-status"><SelectValue /></SelectTrigger>
-                    <SelectContent>{STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
-                  </Select>
+              {/* Status & cost */}
+              <div>
+                <Label>Status</Label>
+                <Select value={newStatus} onValueChange={(v) => { setNewStatus(v); if (v === "resolved" || v === "closed") setShowResolution(true); }}>
+                  <SelectTrigger data-testid="select-new-status"><SelectValue /></SelectTrigger>
+                  <SelectContent>{STATUS_OPTIONS.map(s => <SelectItem key={s} value={s}>{STATUS_LABELS[s]}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+
+              {/* Parts + Labor cost split */}
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Repair Costs</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label className="text-xs">Parts / Materials ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={partsCost}
+                      onChange={e => setPartsCost(e.target.value)}
+                      placeholder="0.00"
+                      data-testid="input-parts-cost"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Labor ($)</Label>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      value={laborCost}
+                      onChange={e => setLaborCost(e.target.value)}
+                      placeholder="0.00"
+                      data-testid="input-labor-cost"
+                    />
+                  </div>
                 </div>
-                <div>
-                  <Label>Actual Cost ($)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    value={completionCost}
-                    onChange={e => setCompletionCost(e.target.value)}
-                    placeholder="0.00"
-                    data-testid="input-completion-cost"
-                  />
+                {(partsCost || laborCost) && (
+                  <div className="flex items-center justify-between pt-1 border-t border-border">
+                    <span className="text-xs font-semibold">Total Cost</span>
+                    <span className="text-sm font-bold text-primary">
+                      ${((partsCost ? Number(partsCost) : 0) + (laborCost ? Number(laborCost) : 0)).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+                <p className="text-xs text-muted-foreground">Enter costs after the job is done. Tenant sees the total only.</p>
+              </div>
+
+              {/* ── Receipt Photos ── */}
+              <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Receipt size={14} className="text-primary" />
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Receipt Photos</p>
+                  </div>
+                  <span className="text-xs text-muted-foreground">{receiptPhotos.length} uploaded</span>
+                </div>
+                <p className="text-xs text-muted-foreground">Upload photos of invoices, receipts, or purchase orders. These appear as evidence in the deposit ledger export.</p>
+
+                {/* Receipt photo grid */}
+                {receiptPhotos.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {receiptPhotos.map((photo: any) => (
+                      <div key={photo.id} className="relative aspect-square rounded-lg overflow-hidden border border-border group cursor-pointer"
+                        onClick={() => setLightboxPhoto(`/uploads/${photo.filename}`)}
+                      >
+                        <img src={`/uploads/${photo.filename}`} alt={photo.originalName || "Receipt"} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors" />
+                        <button
+                          type="button"
+                          onClick={e => { e.stopPropagation(); deletePhoto(photo.id); }}
+                          className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                          data-testid={`btn-delete-receipt-${photo.id}`}
+                        >
+                          <Trash2 size={11} />
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/50 text-white text-xs text-center py-0.5 truncate px-1">
+                          {photo.originalName || "receipt"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Upload buttons */}
+                <input
+                  ref={receiptInputRef}
+                  type="file"
+                  accept="image/*,application/pdf"
+                  multiple
+                  className="hidden"
+                  onChange={handleReceiptUpload}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    disabled={uploadingReceipts}
+                    onClick={() => { if (receiptInputRef.current) { receiptInputRef.current.removeAttribute("capture"); receiptInputRef.current.click(); } }}
+                    data-testid="btn-upload-receipt-gallery"
+                  >
+                    <Image size={13} className="mr-1.5" />
+                    {uploadingReceipts ? "Uploading..." : "Upload Receipt"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="flex-1"
+                    disabled={uploadingReceipts}
+                    onClick={() => { if (receiptInputRef.current) { receiptInputRef.current.setAttribute("capture", "environment"); receiptInputRef.current.click(); } }}
+                    data-testid="btn-photo-receipt-camera"
+                  >
+                    <Camera size={13} className="mr-1.5" />
+                    Take Photo
+                  </Button>
                 </div>
               </div>
+
               <div>
                 <Label>Landlord Notes</Label>
                 <Textarea value={landlordNotes} onChange={e => setLandlordNotes(e.target.value)} rows={2} placeholder="Contractor info, work performed, timeline..." data-testid="textarea-landlord-notes" />

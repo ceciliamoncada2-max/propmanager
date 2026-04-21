@@ -8,7 +8,8 @@ export function generateDepositTrackerXlsx(
   entries: DepositEntry[],
   inspection: Inspection | undefined,
   inspectionItems: InspectionItem[],
-  maintenanceRequests: MaintenanceRequest[] = []
+  maintenanceRequests: MaintenanceRequest[] = [],
+  maintenancePhotos: Record<number, any[]> = {}
 ): Buffer {
   const wb = XLSX.utils.book_new();
 
@@ -200,15 +201,24 @@ export function generateDepositTrackerXlsx(
     [
       "#", "Title", "Category", "Location", "Urgency",
       "Submitted", "Resolved",
-      "Actual Cost ($)", "QBO Category",
+      "Parts / Materials ($)", "Labor ($)", "Total Cost ($)", "QBO Category",
       "Contract State", "Page", "Section", "Sub-Section",
       "Relevant Contract Text",
-      "Deposit Decision", "Deposit Amount ($)",
+      "Deposit Decision", "Amount Charged to Deposit ($)",
+      "Receipt / Invoice Evidence",
       "Resolution Notes"
     ],
   ];
 
-  resolved.forEach((r, i) => {
+  resolved.forEach((r: any, i) => {
+    const parts = r.partsCost != null ? r.partsCost : "";
+    const labor = r.laborCost != null ? r.laborCost : "";
+    const total = r.completionCost != null ? r.completionCost : "";
+    const photos = maintenancePhotos[r.id] || [];
+    const receipts = photos
+      .filter((p: any) => p.caption === "receipt")
+      .map((p: any) => p.originalName || p.filename)
+      .join(", ");
     maintData.push([
       i + 1,
       r.title,
@@ -217,7 +227,9 @@ export function generateDepositTrackerXlsx(
       r.urgency,
       r.submittedAt ? r.submittedAt.split("T")[0] : "",
       r.resolvedAt ? r.resolvedAt.split("T")[0] : "",
-      r.completionCost != null ? r.completionCost : "",
+      parts,
+      labor,
+      total,
       r.qboCategory || "",
       r.contractState || "",
       r.contractPage || "",
@@ -226,6 +238,7 @@ export function generateDepositTrackerXlsx(
       r.contractRelevantText || "",
       r.depositDecision || "Pending",
       r.depositAmount != null ? r.depositAmount : "",
+      receipts || "No receipts uploaded",
       r.resolutionNotes || "",
     ]);
   });
@@ -233,31 +246,35 @@ export function generateDepositTrackerXlsx(
   if (resolved.length === 0) {
     maintData.push(["No resolved maintenance requests."]);
   } else {
-    const totalCost = resolved.reduce((sum, r) => sum + (r.completionCost || 0), 0);
+    const totalCost = resolved.reduce((sum, r: any) => sum + (r.completionCost || 0), 0);
+    const totalParts = resolved.reduce((sum, r: any) => sum + (r.partsCost || 0), 0);
+    const totalLabor = resolved.reduce((sum, r: any) => sum + (r.laborCost || 0), 0);
     const tenantCharges = resolved
-      .filter(r => r.depositDecision === "Tenant")
-      .reduce((sum, r) => sum + (r.depositAmount || 0), 0);
+      .filter((r: any) => r.depositDecision === "Tenant")
+      .reduce((sum, r: any) => sum + (r.depositAmount || 0), 0);
     const landlordCost = resolved
-      .filter(r => r.depositDecision === "Landlord")
-      .reduce((sum, r) => sum + (r.completionCost || 0), 0);
+      .filter((r: any) => r.depositDecision === "Landlord")
+      .reduce((sum, r: any) => sum + (r.completionCost || 0), 0);
 
     maintData.push([]);
     maintData.push(["SUMMARY"]);
     maintData.push(["Total Resolved Requests:", resolved.length]);
-    maintData.push(["Total Repair Costs ($):", totalCost]);
+    maintData.push(["Total Parts / Materials ($):", "", "", "", "", "", "", totalParts]);
+    maintData.push(["Total Labor ($):", "", "", "", "", "", "", "", totalLabor]);
+    maintData.push(["Total Repair Costs ($):", "", "", "", "", "", "", "", "", totalCost]);
     maintData.push(["Tenant-Charged Deposit Deductions ($):", tenantCharges]);
     maintData.push(["Landlord-Absorbed Costs ($):", landlordCost]);
-    maintData.push(["Pending Decisions:", resolved.filter(r => !r.depositDecision || r.depositDecision === "Pending").length]);
+    maintData.push(["Pending Decisions:", resolved.filter((r: any) => !r.depositDecision || r.depositDecision === "Pending").length]);
   }
 
   const wsMaint = XLSX.utils.aoa_to_sheet(maintData);
   wsMaint["!cols"] = [
-    { wch: 4 }, { wch: 30 }, { wch: 14 }, { wch: 18 }, { wch: 12 },
+    { wch: 4 }, { wch: 28 }, { wch: 14 }, { wch: 16 }, { wch: 10 },
     { wch: 13 }, { wch: 13 },
-    { wch: 16 }, { wch: 22 },
+    { wch: 20 }, { wch: 12 }, { wch: 14 }, { wch: 22 },
     { wch: 14 }, { wch: 8 }, { wch: 12 }, { wch: 14 },
     { wch: 50 },
-    { wch: 18 }, { wch: 18 },
+    { wch: 18 }, { wch: 24 },
     { wch: 40 },
   ];
   XLSX.utils.book_append_sheet(wb, wsMaint, "Maintenance Resolution Log");
