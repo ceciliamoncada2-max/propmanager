@@ -78,3 +78,18 @@ export async function notifyTenantResolved(tenantPhone: string | null | undefine
   if (notes) msg += ` Notes: ${notes}`;
   await sendSMS(tenantPhone, msg);
 }
+
+export async function notifyLandlordVisitConfirmed(title: string, tenantName: string, scheduledVisit: string) {
+  if (!landlordPhone) return;
+  await sendSMS(landlordPhone,
+    `${tenantName} confirmed the visit for "${title}" on ${scheduledVisit}. Access will be available.`
+  );
+}
+
+export async function notifyLandlordRescheduleRequested(title: string, tenantName: string, message: string | null) {
+  if (!landlordPhone) return;
+  let msg = `${tenantName} requested a reschedule for "${title}".`;
+  if (message) msg += ` Tenant message: ${message}`;
+  msg += ` Please open PropManager to set a new date.`;
+  await sendSMS(landlordPhone, msg);
+}

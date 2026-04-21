@@ -59,9 +59,11 @@ async function initDb() {
       completion_cost REAL, contract_state TEXT, contract_page TEXT,
       contract_section TEXT, contract_subsection TEXT, contract_relevant_text TEXT,
       deposit_decision TEXT, deposit_amount REAL, qbo_category TEXT,
-      qbo_expense_id TEXT, resolution_notes TEXT, scheduled_visit TEXT
+      qbo_expense_id TEXT, resolution_notes TEXT, scheduled_visit TEXT,
+      visit_confirmed TEXT
     );
     ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS scheduled_visit TEXT;
+    ALTER TABLE maintenance_requests ADD COLUMN IF NOT EXISTS visit_confirmed TEXT;
     CREATE TABLE IF NOT EXISTS maintenance_photos (
       id SERIAL PRIMARY KEY, maintenance_request_id INTEGER NOT NULL,
       filename TEXT NOT NULL, original_name TEXT, uploaded_at TEXT NOT NULL, caption TEXT
@@ -117,7 +119,8 @@ function mapMaint(r: any): MaintenanceRequest {
     contractSubsection: r.contract_subsection, contractRelevantText: r.contract_relevant_text,
     depositDecision: r.deposit_decision, depositAmount: r.deposit_amount,
     qboCategory: r.qbo_category, qboExpenseId: r.qbo_expense_id,
-    resolutionNotes: r.resolution_notes, scheduledVisit: r.scheduled_visit };
+    resolutionNotes: r.resolution_notes, scheduledVisit: r.scheduled_visit,
+    visitConfirmed: r.visit_confirmed };
 }
 function mapPhoto(r: any): MaintenancePhoto {
   return { id: r.id, maintenanceRequestId: r.maintenance_request_id, filename: r.filename,
@@ -229,7 +232,7 @@ export class PgStorage implements IStorage {
   }
   async getMaintenanceRequest(id: number) { const r = await pool.query(`SELECT * FROM maintenance_requests WHERE id=$1`,[id]); return r.rows[0] ? mapMaint(r.rows[0]) : undefined; }
   async createMaintenanceRequest(d: InsertMaintenanceRequest) { const r = await pool.query(`INSERT INTO maintenance_requests (tenant_id,property_id,submitted_at,category,urgency,title,description,location,status,landlord_notes,resolved_at,completion_cost,contract_state,contract_page,contract_section,contract_subsection,contract_relevant_text,deposit_decision,deposit_amount,qbo_category,qbo_expense_id,resolution_notes) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22) RETURNING *`,[d.tenantId,d.propertyId,d.submittedAt,d.category,d.urgency,d.title,d.description,d.location??null,d.status??'open',d.landlordNotes??null,d.resolvedAt??null,d.completionCost??null,d.contractState??null,d.contractPage??null,d.contractSection??null,d.contractSubsection??null,d.contractRelevantText??null,d.depositDecision??null,d.depositAmount??null,d.qboCategory??null,d.qboExpenseId??null,d.resolutionNotes??null]); return mapMaint(r.rows[0]); }
-  async updateMaintenanceRequest(id: number, d: Partial<InsertMaintenanceRequest>) { const r = await pool.query(`UPDATE maintenance_requests SET status=COALESCE($1,status),landlord_notes=COALESCE($2,landlord_notes),resolved_at=COALESCE($3,resolved_at),completion_cost=COALESCE($4,completion_cost),contract_state=COALESCE($5,contract_state),contract_page=COALESCE($6,contract_page),contract_section=COALESCE($7,contract_section),contract_subsection=COALESCE($8,contract_subsection),contract_relevant_text=COALESCE($9,contract_relevant_text),deposit_decision=COALESCE($10,deposit_decision),deposit_amount=COALESCE($11,deposit_amount),qbo_category=COALESCE($12,qbo_category),qbo_expense_id=COALESCE($13,qbo_expense_id),resolution_notes=COALESCE($14,resolution_notes),urgency=COALESCE($15,urgency),title=COALESCE($16,title),description=COALESCE($17,description),location=COALESCE($18,location),category=COALESCE($19,category),scheduled_visit=COALESCE($20,scheduled_visit) WHERE id=$21 RETURNING *`,[d.status,d.landlordNotes,d.resolvedAt,d.completionCost,d.contractState,d.contractPage,d.contractSection,d.contractSubsection,d.contractRelevantText,d.depositDecision,d.depositAmount,d.qboCategory,d.qboExpenseId,d.resolutionNotes,d.urgency,d.title,d.description,d.location,d.category,(d as any).scheduledVisit??null,id]); return r.rows[0] ? mapMaint(r.rows[0]) : undefined; }
+  async updateMaintenanceRequest(id: number, d: Partial<InsertMaintenanceRequest>) { const r = await pool.query(`UPDATE maintenance_requests SET status=COALESCE($1,status),landlord_notes=COALESCE($2,landlord_notes),resolved_at=COALESCE($3,resolved_at),completion_cost=COALESCE($4,completion_cost),contract_state=COALESCE($5,contract_state),contract_page=COALESCE($6,contract_page),contract_section=COALESCE($7,contract_section),contract_subsection=COALESCE($8,contract_subsection),contract_relevant_text=COALESCE($9,contract_relevant_text),deposit_decision=COALESCE($10,deposit_decision),deposit_amount=COALESCE($11,deposit_amount),qbo_category=COALESCE($12,qbo_category),qbo_expense_id=COALESCE($13,qbo_expense_id),resolution_notes=COALESCE($14,resolution_notes),urgency=COALESCE($15,urgency),title=COALESCE($16,title),description=COALESCE($17,description),location=COALESCE($18,location),category=COALESCE($19,category),scheduled_visit=COALESCE($20,scheduled_visit),visit_confirmed=COALESCE($21,visit_confirmed) WHERE id=$22 RETURNING *`,[d.status,d.landlordNotes,d.resolvedAt,d.completionCost,d.contractState,d.contractPage,d.contractSection,d.contractSubsection,d.contractRelevantText,d.depositDecision,d.depositAmount,d.qboCategory,d.qboExpenseId,d.resolutionNotes,d.urgency,d.title,d.description,d.location,d.category,(d as any).scheduledVisit??null,(d as any).visitConfirmed??null,id]); return r.rows[0] ? mapMaint(r.rows[0]) : undefined; }
 
   // Maintenance Photos
   async getMaintenancePhotos(maintenanceRequestId: number) { const r = await pool.query(`SELECT * FROM maintenance_photos WHERE maintenance_request_id=$1 ORDER BY id`,[maintenanceRequestId]); return r.rows.map(mapPhoto); }

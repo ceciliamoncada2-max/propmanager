@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useParams } from "wouter";
-import { Wrench, Plus, CheckCircle2, Clock, AlertTriangle, X, Camera, Image, Trash2 } from "lucide-react";
+import { Wrench, Plus, CheckCircle2, Clock, AlertTriangle, X, Camera, Image, Trash2, Calendar, ThumbsUp, RefreshCw, MessageSquare } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -41,6 +41,8 @@ export default function TenantPortal() {
   const [photos, setPhotos] = useState<PhotoPreview[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [rescheduleReqId, setRescheduleReqId] = useState<number | null>(null);
+  const [rescheduleMsg, setRescheduleMsg] = useState("");
 
   useEffect(() => { document.documentElement.classList.toggle("dark", dark); }, [dark]);
 
@@ -51,6 +53,32 @@ export default function TenantPortal() {
       if (!r.ok) throw new Error("Invalid");
       return r.json();
     },
+  });
+
+  const confirmMutation = useMutation({
+    mutationFn: async (reqId: number) => {
+      const r = await apiRequest("POST", `/api/portal/${code}/maintenance/${reqId}/confirm`, {});
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/portal", code] });
+      toast({ title: "Visit confirmed", description: "Your landlord has been notified. Thank you!" });
+    },
+    onError: () => toast({ title: "Could not confirm", variant: "destructive" }),
+  });
+
+  const rescheduleMutation = useMutation({
+    mutationFn: async ({ reqId, message }: { reqId: number; message: string }) => {
+      const r = await apiRequest("POST", `/api/portal/${code}/maintenance/${reqId}/reschedule`, { message });
+      return r.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/portal", code] });
+      setRescheduleReqId(null);
+      setRescheduleMsg("");
+      toast({ title: "Reschedule requested", description: "Your landlord has been notified and will contact you with a new date." });
+    },
+    onError: () => toast({ title: "Could not send request", variant: "destructive" }),
   });
 
   const submitMutation = useMutation({
@@ -215,6 +243,63 @@ export default function TenantPortal() {
                               <p className="text-xs text-blue-600 dark:text-blue-400 mt-0.5">{r.landlordNotes}</p>
                             </div>
                           )}
+
+                          {/* ── Scheduled Visit confirmation block ── */}
+                          {r.scheduledVisit && (
+                            <div className="mt-3 rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 p-3">
+                              <div className="flex items-center gap-1.5 mb-1">
+                                <Calendar size={13} className="text-amber-600 dark:text-amber-400" />
+                                <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">Visit Scheduled</p>
+                              </div>
+                              <p className="text-xs text-amber-700 dark:text-amber-300 mb-2">
+                                {(() => {
+                                  try { return new Date(r.scheduledVisit).toLocaleString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }); }
+                                  catch { return r.scheduledVisit; }
+                                })()}
+                              </p>
+
+                              {/* Already responded */}
+                              {r.visitConfirmed === "confirmed" && (
+                                <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                                  <CheckCircle2 size={13} />
+                                  <p className="text-xs font-medium">You confirmed this visit</p>
+                                </div>
+                              )}
+                              {r.visitConfirmed?.startsWith("reschedule:") && (
+                                <div className="flex items-center gap-1.5 text-orange-600 dark:text-orange-400">
+                                  <RefreshCw size={13} />
+                                  <p className="text-xs font-medium">Reschedule requested — waiting for landlord</p>
+                                </div>
+                              )}
+
+                              {/* Action buttons — only if not yet responded */}
+                              {!r.visitConfirmed && (
+                                <div className="flex gap-2 mt-1">
+                                  <Button
+                                    size="sm"
+                                    className="flex-1 h-8 text-xs bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    onClick={() => confirmMutation.mutate(r.id)}
+                                    disabled={confirmMutation.isPending}
+                                    data-testid={`btn-confirm-visit-${r.id}`}
+                                  >
+                                    <ThumbsUp size={12} className="mr-1" />
+                                    Confirm Visit
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="flex-1 h-8 text-xs border-orange-300 text-orange-600 hover:bg-orange-50 dark:border-orange-700 dark:text-orange-400"
+                                    onClick={() => { setRescheduleReqId(r.id); setRescheduleMsg(""); }}
+                                    data-testid={`btn-reschedule-visit-${r.id}`}
+                                  >
+                                    <RefreshCw size={12} className="mr-1" />
+                                    Request Reschedule
+                                  </Button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+
                           {/* Photo count indicator */}
                           {r.photoCount > 0 && (
                             <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
@@ -239,6 +324,37 @@ export default function TenantPortal() {
           )}
         </div>
       </div>
+
+      {/* Reschedule dialog */}
+      <Dialog open={rescheduleReqId !== null} onOpenChange={(v) => { if (!v) { setRescheduleReqId(null); setRescheduleMsg(""); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><RefreshCw size={16} className="text-orange-500" /> Request Reschedule</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground">Let your landlord know why you need a different time. They will contact you to arrange a new date.</p>
+            <div>
+              <Label>Message <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+              <Textarea
+                value={rescheduleMsg}
+                onChange={e => setRescheduleMsg(e.target.value)}
+                rows={3}
+                placeholder="e.g. I have work on that day — available after 5pm or any weekend."
+                data-testid="textarea-reschedule-msg"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setRescheduleReqId(null); setRescheduleMsg(""); }}>Cancel</Button>
+            <Button
+              onClick={() => { if (rescheduleReqId) rescheduleMutation.mutate({ reqId: rescheduleReqId, message: rescheduleMsg }); }}
+              disabled={rescheduleMutation.isPending}
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              data-testid="btn-submit-reschedule"
+            >
+              {rescheduleMutation.isPending ? "Sending..." : "Send Request"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Submit dialog */}
       <Dialog open={open} onOpenChange={(v) => { if (!v) resetForm(); setOpen(v); }}>

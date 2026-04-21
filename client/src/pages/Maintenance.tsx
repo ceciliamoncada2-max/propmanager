@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Wrench, Search, FileText, DollarSign, BookOpen, CheckCircle2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react";
+import { Wrench, Search, FileText, DollarSign, BookOpen, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Calendar, ThumbsUp, RefreshCw, X } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -266,6 +266,16 @@ export default function Maintenance() {
                           Needs Decision
                         </span>
                       )}
+                      {r.visitConfirmed === "confirmed" && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300 flex items-center gap-1">
+                          <ThumbsUp size={10} /> Visit Confirmed
+                        </span>
+                      )}
+                      {r.visitConfirmed?.startsWith?.("reschedule:") && (
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-orange-100 text-orange-700 dark:bg-orange-900/40 dark:text-orange-300 flex items-center gap-1">
+                          <RefreshCw size={10} /> Reschedule Requested
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-muted-foreground mt-0.5">
                       {tenantName(r.tenantId)} · {propertyAddr(r.propertyId)}{r.location ? ` · ${r.location}` : ""}
@@ -412,6 +422,26 @@ export default function Maintenance() {
                   onChange={e => setScheduledVisit(e.target.value)}
                   data-testid="input-scheduled-visit"
                 />
+                {/* Visit confirmation status badge */}
+                {selectedReq?.visitConfirmed === "confirmed" && (
+                  <div className="mt-2 flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+                    <ThumbsUp size={13} />
+                    <span className="text-xs font-medium">Tenant confirmed this visit</span>
+                  </div>
+                )}
+                {selectedReq?.visitConfirmed?.startsWith?.("reschedule:") && (() => {
+                  const msg = selectedReq.visitConfirmed.replace(/^reschedule:/, "").trim();
+                  return (
+                    <div className="mt-2 rounded-lg border border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 p-2.5">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <RefreshCw size={12} className="text-orange-500" />
+                        <span className="text-xs font-semibold text-orange-700 dark:text-orange-300">Tenant requested reschedule</span>
+                      </div>
+                      {msg && <p className="text-xs text-orange-600 dark:text-orange-400">Message: "{msg}"</p>}
+                      <p className="text-xs text-muted-foreground mt-1">Update the date above and save to notify the tenant.</p>
+                    </div>
+                  );
+                })()}
               </div>
               <div>
                 <Label>Landlord Notes</Label>

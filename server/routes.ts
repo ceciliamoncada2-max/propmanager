@@ -3,7 +3,7 @@ import { type Server } from "http";
 import { storage } from "./storage";
 import { generateDepositTrackerXlsx } from "./excelExport";
 import { searchLeaseClauses, getClausesForCategory } from "./leaseReference";
-import { notifyTenantNewRequest, notifyLandlordNewRequest, notifyTenantStatusUpdate, notifyTenantResolved, notifyTenantVisitScheduled } from "./sms";
+import { notifyTenantNewRequest, notifyLandlordNewRequest, notifyTenantStatusUpdate, notifyTenantResolved, notifyTenantVisitScheduled, notifyLandlordVisitConfirmed, notifyLandlordRescheduleRequested } from "./sms";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -292,8 +292,10 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       const tenantPhone = tenant?.phone || null;
       const tenantPhone2 = (tenant as any)?.phone2 || null;
       const phones = [tenantPhone, tenantPhone2].filter(Boolean);
-      // Visit scheduled
+      // Visit scheduled (or rescheduled) — reset visitConfirmed so tenant must re-confirm
       if (body.scheduledVisit && body.scheduledVisit !== prev.scheduledVisit) {
+        // Clear prior confirmation when date changes
+        await storage.updateMaintenanceRequest(Number(req.params.id), { visitConfirmed: null } as any);
         phones.forEach(p => notifyTenantVisitScheduled(p, r.title, body.scheduledVisit).catch(console.error));
       }
       // Status changed
@@ -335,6 +337,32 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       notifyLandlordNewRequest(created.title, portalTenant.name, created.location).catch(console.error);
     }
     res.json(created);
+  });
+
+  // Portal confirm / reschedule
+  app.post("/api/portal/:code/maintenance/:id/confirm", async (req, res) => {
+    const tenant = await storage.getTenantByPortalCode(req.params.code);
+    if (!tenant) return res.status(404).json({ error: "Invalid portal code" });
+    const reqId = Number(req.params.id);
+    const maint = await storage.getMaintenanceRequest(reqId);
+    if (!maint || maint.tenantId !== tenant.id) return res.status(404).json({ error: "Not found" });
+    const updated = await storage.updateMaintenanceRequest(reqId, { visitConfirmed: "confirmed" } as any);
+    // Notify landlord
+    notifyLandlordVisitConfirmed(maint.title, tenant.name, maint.scheduledVisit || "").catch(console.error);
+    res.json(updated);
+  });
+
+  app.post("/api/portal/:code/maintenance/:id/reschedule", async (req, res) => {
+    const tenant = await storage.getTenantByPortalCode(req.params.code);
+    if (!tenant) return res.status(404).json({ error: "Invalid portal code" });
+    const reqId = Number(req.params.id);
+    const maint = await storage.getMaintenanceRequest(reqId);
+    if (!maint || maint.tenantId !== tenant.id) return res.status(404).json({ error: "Not found" });
+    const { message } = req.body;
+    const updated = await storage.updateMaintenanceRequest(reqId, { visitConfirmed: `reschedule:${message || ""}` } as any);
+    // Notify landlord
+    notifyLandlordRescheduleRequested(maint.title, tenant.name, message || null).catch(console.error);
+    res.json(updated);
   });
 
   // ---- Photo Uploads ----
