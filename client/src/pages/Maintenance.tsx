@@ -72,6 +72,15 @@ export default function Maintenance() {
   const { data: requests = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/maintenance"] });
   const { data: tenants = [] } = useQuery<any[]>({ queryKey: ["/api/tenants"] });
   const { data: properties = [] } = useQuery<any[]>({ queryKey: ["/api/properties"] });
+  const { data: reqPhotos = [] } = useQuery<any[]>({
+    queryKey: ["/api/maintenance", selectedReq?.id, "photos"],
+    queryFn: async () => {
+      if (!selectedReq?.id) return [];
+      const r = await fetch(`/api/maintenance/${selectedReq.id}/photos`);
+      return r.json();
+    },
+    enabled: !!selectedReq?.id,
+  });
 
   const updateMutation = useMutation({
     mutationFn: ({ id, data }: any) => apiRequest("PATCH", `/api/maintenance/${id}`, data),
@@ -112,7 +121,7 @@ export default function Maintenance() {
     // Auto-fetch category suggestions
     if (r.category) {
       try {
-        const resp = await apiRequest("GET", `/api/lease/category/${encodeURIComponent(r.category)}?state=TX`);
+        const resp = await fetch(`/api/lease/category/${encodeURIComponent(r.category)}?state=TX`);
         const data = await resp.json();
         setSuggestedClauses(Array.isArray(data) ? data : []);
       } catch {
