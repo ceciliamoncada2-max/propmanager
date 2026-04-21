@@ -1,6 +1,7 @@
 import { useLocation, Link } from "wouter";
 import { Home, Building2, Users, ClipboardList, DollarSign, Wrench, Moon, Sun, Menu, X, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
+import { API_BASE } from "@/lib/queryClient";
 
 const navItems = [
   { href: "/", label: "Dashboard", icon: Home },
@@ -57,7 +58,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           </button>
           <button
             onClick={async () => {
-              await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+              await fetch(`${API_BASE}/api/auth/logout`, { method: "POST", credentials: "include" });
               window.location.reload();
             }}
             className="sidebar-link w-full text-red-400 hover:text-red-300"

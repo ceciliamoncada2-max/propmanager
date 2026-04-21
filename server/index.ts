@@ -9,6 +9,9 @@ import { createServer } from "node:http";
 const app = express();
 const httpServer = createServer(app);
 
+// Trust Railway's proxy so secure cookies work behind HTTPS
+app.set("trust proxy", 1);
+
 declare module "http" {
   interface IncomingMessage {
     rawBody: unknown;

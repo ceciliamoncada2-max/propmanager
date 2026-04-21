@@ -4,6 +4,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import { Toaster } from "@/components/ui/toaster";
 import { useState, useEffect } from "react";
+import { API_BASE } from "@/lib/queryClient";
 import Dashboard from "@/pages/Dashboard";
 import Properties from "@/pages/Properties";
 import Tenants from "@/pages/Tenants";
@@ -21,7 +22,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch("/api/auth/check", { credentials: "include" })
+    fetch(`${API_BASE}/api/auth/check`, { credentials: "include" })
       .then((r) => r.json())
       .then((d) => setAuthed(d.authed))
       .catch(() => setAuthed(false));

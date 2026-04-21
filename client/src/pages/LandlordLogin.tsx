@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { API_BASE } from "@/lib/queryClient";
 import { Wrench, Lock, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +23,7 @@ export default function LandlordLogin({ onAuthed }: Props) {
     setError("");
     setLoading(true);
     try {
-      const r = await fetch("/api/auth/login", {
+      const r = await fetch(`${API_BASE}/api/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ password }),
