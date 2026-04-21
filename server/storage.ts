@@ -23,10 +23,14 @@ async function initDb() {
     );
     CREATE TABLE IF NOT EXISTS tenants (
       id SERIAL PRIMARY KEY, property_id INTEGER NOT NULL, name TEXT NOT NULL,
-      email TEXT, phone TEXT, unit_number TEXT, lease_start TEXT, lease_end TEXT,
+      email TEXT, phone TEXT, name2 TEXT, email2 TEXT, phone2 TEXT,
+      unit_number TEXT, lease_start TEXT, lease_end TEXT,
       move_out_date TEXT, forwarding_address TEXT, portal_code TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'active'
     );
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS name2 TEXT;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS email2 TEXT;
+    ALTER TABLE tenants ADD COLUMN IF NOT EXISTS phone2 TEXT;
     CREATE TABLE IF NOT EXISTS deposits (
       id SERIAL PRIMARY KEY, tenant_id INTEGER NOT NULL, property_id INTEGER NOT NULL,
       amount REAL NOT NULL, date_received TEXT NOT NULL, bank_name TEXT,
@@ -76,6 +80,7 @@ function mapProp(r: any): Property {
 }
 function mapTenant(r: any): Tenant {
   return { id: r.id, propertyId: r.property_id, name: r.name, email: r.email, phone: r.phone,
+    name2: r.name2, email2: r.email2, phone2: r.phone2,
     unitNumber: r.unit_number, leaseStart: r.lease_start, leaseEnd: r.lease_end,
     moveOutDate: r.move_out_date, forwardingAddress: r.forwarding_address,
     portalCode: r.portal_code, status: r.status };
@@ -175,8 +180,8 @@ export class PgStorage implements IStorage {
   async getTenants(propertyId?: number) { const r = propertyId ? await pool.query(`SELECT * FROM tenants WHERE property_id=$1 ORDER BY id`,[propertyId]) : await pool.query(`SELECT * FROM tenants ORDER BY id`); return r.rows.map(mapTenant); }
   async getTenant(id: number) { const r = await pool.query(`SELECT * FROM tenants WHERE id=$1`,[id]); return r.rows[0] ? mapTenant(r.rows[0]) : undefined; }
   async getTenantByPortalCode(code: string) { const r = await pool.query(`SELECT * FROM tenants WHERE portal_code=$1`,[code]); return r.rows[0] ? mapTenant(r.rows[0]) : undefined; }
-  async createTenant(d: InsertTenant) { const r = await pool.query(`INSERT INTO tenants (property_id,name,email,phone,unit_number,lease_start,lease_end,move_out_date,forwarding_address,portal_code,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,[d.propertyId,d.name,d.email??null,d.phone??null,d.unitNumber??null,d.leaseStart??null,d.leaseEnd??null,d.moveOutDate??null,d.forwardingAddress??null,d.portalCode,d.status??'active']); return mapTenant(r.rows[0]); }
-  async updateTenant(id: number, d: Partial<InsertTenant>) { const r = await pool.query(`UPDATE tenants SET property_id=COALESCE($1,property_id),name=COALESCE($2,name),email=COALESCE($3,email),phone=COALESCE($4,phone),unit_number=COALESCE($5,unit_number),lease_start=COALESCE($6,lease_start),lease_end=COALESCE($7,lease_end),move_out_date=COALESCE($8,move_out_date),forwarding_address=COALESCE($9,forwarding_address),portal_code=COALESCE($10,portal_code),status=COALESCE($11,status) WHERE id=$12 RETURNING *`,[d.propertyId,d.name,d.email,d.phone,d.unitNumber,d.leaseStart,d.leaseEnd,d.moveOutDate,d.forwardingAddress,d.portalCode,d.status,id]); return r.rows[0] ? mapTenant(r.rows[0]) : undefined; }
+  async createTenant(d: InsertTenant) { const r = await pool.query(`INSERT INTO tenants (property_id,name,email,phone,name2,email2,phone2,unit_number,lease_start,lease_end,move_out_date,forwarding_address,portal_code,status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING *`,[d.propertyId,d.name,d.email??null,d.phone??null,(d as any).name2??null,(d as any).email2??null,(d as any).phone2??null,d.unitNumber??null,d.leaseStart??null,d.leaseEnd??null,d.moveOutDate??null,d.forwardingAddress??null,d.portalCode,d.status??'active']); return mapTenant(r.rows[0]); }
+  async updateTenant(id: number, d: Partial<InsertTenant>) { const r = await pool.query(`UPDATE tenants SET property_id=COALESCE($1,property_id),name=COALESCE($2,name),email=COALESCE($3,email),phone=COALESCE($4,phone),name2=COALESCE($5,name2),email2=COALESCE($6,email2),phone2=COALESCE($7,phone2),unit_number=COALESCE($8,unit_number),lease_start=COALESCE($9,lease_start),lease_end=COALESCE($10,lease_end),move_out_date=COALESCE($11,move_out_date),forwarding_address=COALESCE($12,forwarding_address),portal_code=COALESCE($13,portal_code),status=COALESCE($14,status) WHERE id=$15 RETURNING *`,[d.propertyId,d.name,d.email,d.phone,(d as any).name2,(d as any).email2,(d as any).phone2,d.unitNumber,d.leaseStart,d.leaseEnd,d.moveOutDate,d.forwardingAddress,d.portalCode,d.status,id]); return r.rows[0] ? mapTenant(r.rows[0]) : undefined; }
 
   // Deposits
   async getDeposits(tenantId?: number) { const r = tenantId ? await pool.query(`SELECT * FROM deposits WHERE tenant_id=$1`,[tenantId]) : await pool.query(`SELECT * FROM deposits`); return r.rows.map(mapDeposit); }

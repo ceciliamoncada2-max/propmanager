@@ -13,7 +13,9 @@ import { Link, useLocation } from "wouter";
 
 const emptyForm = {
   propertyId: "",
-  name: "", email: "", phone: "", unitNumber: "",
+  name: "", email: "", phone: "",
+  name2: "", email2: "", phone2: "",
+  unitNumber: "",
   leaseStart: "", leaseEnd: "", status: "active",
   moveOutDate: "", forwardingAddress: "",
 };
@@ -44,7 +46,7 @@ export default function Tenants() {
   function openAdd() { setEditing(null); setForm({ ...emptyForm, propertyId: filterPropId || "" }); setOpen(true); }
   function openEdit(t: any) {
     setEditing(t);
-    setForm({ propertyId: String(t.propertyId), name: t.name, email: t.email || "", phone: t.phone || "", unitNumber: t.unitNumber || "", leaseStart: t.leaseStart || "", leaseEnd: t.leaseEnd || "", status: t.status, moveOutDate: t.moveOutDate || "", forwardingAddress: t.forwardingAddress || "" });
+    setForm({ propertyId: String(t.propertyId), name: t.name, email: t.email || "", phone: t.phone || "", name2: t.name2 || "", email2: t.email2 || "", phone2: t.phone2 || "", unitNumber: t.unitNumber || "", leaseStart: t.leaseStart || "", leaseEnd: t.leaseEnd || "", status: t.status, moveOutDate: t.moveOutDate || "", forwardingAddress: t.forwardingAddress || "" });
     setOpen(true);
   }
   function closeDialog() { setOpen(false); setEditing(null); }
@@ -99,7 +101,8 @@ export default function Tenants() {
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium status-${t.status}`}>{t.status === "active" ? "Active" : "Moved Out"}</span>
                     </div>
                     <p className="text-sm text-muted-foreground">{propName(t.propertyId)}{t.unitNumber ? ` · Unit ${t.unitNumber}` : ""}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{t.email}{t.phone ? ` · ${t.phone}` : ""}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5"><span className="font-medium text-foreground/70">T1:</span> {t.email}{t.phone ? ` · ${t.phone}` : ""}</p>
+                    {t.name2 && <p className="text-xs text-muted-foreground mt-0.5"><span className="font-medium text-foreground/70">T2:</span> {t.name2}{t.email2 ? ` · ${t.email2}` : ""}{t.phone2 ? ` · ${t.phone2}` : ""}</p>}
                     {t.leaseStart && <p className="text-xs text-muted-foreground mt-0.5">Lease: {t.leaseStart} → {t.leaseEnd || "ongoing"}</p>}
                   </div>
                   <div className="flex flex-wrap gap-2 items-center">
@@ -138,19 +141,43 @@ export default function Tenants() {
                 </SelectContent>
               </Select>
             </div>
+            {/* Tenant 1 */}
+            <div className="rounded-lg border border-border p-3 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tenant 1 (Primary)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label>Full Name</Label>
+                  <Input value={form.name} onChange={e => setForm((f: any) => ({ ...f, name: e.target.value }))} required data-testid="input-tenant-name" />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input type="email" value={form.email} onChange={e => setForm((f: any) => ({ ...f, email: e.target.value }))} data-testid="input-tenant-email" />
+                </div>
+                <div>
+                  <Label>Phone</Label>
+                  <Input value={form.phone} onChange={e => setForm((f: any) => ({ ...f, phone: e.target.value }))} data-testid="input-tenant-phone" />
+                </div>
+              </div>
+            </div>
+            {/* Tenant 2 */}
+            <div className="rounded-lg border border-border p-3 space-y-3">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Tenant 2 (Co-Tenant — optional)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="col-span-2">
+                  <Label>Full Name</Label>
+                  <Input value={form.name2} onChange={e => setForm((f: any) => ({ ...f, name2: e.target.value }))} data-testid="input-tenant-name2" />
+                </div>
+                <div>
+                  <Label>Email</Label>
+                  <Input type="email" value={form.email2} onChange={e => setForm((f: any) => ({ ...f, email2: e.target.value }))} data-testid="input-tenant-email2" />
+                </div>
+                <div>
+                  <Label>Phone</Label>
+                  <Input value={form.phone2} onChange={e => setForm((f: any) => ({ ...f, phone2: e.target.value }))} data-testid="input-tenant-phone2" />
+                </div>
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3">
-              <div className="col-span-2">
-                <Label>Full Name</Label>
-                <Input value={form.name} onChange={e => setForm((f: any) => ({ ...f, name: e.target.value }))} required data-testid="input-tenant-name" />
-              </div>
-              <div>
-                <Label>Email</Label>
-                <Input type="email" value={form.email} onChange={e => setForm((f: any) => ({ ...f, email: e.target.value }))} data-testid="input-tenant-email" />
-              </div>
-              <div>
-                <Label>Phone</Label>
-                <Input value={form.phone} onChange={e => setForm((f: any) => ({ ...f, phone: e.target.value }))} data-testid="input-tenant-phone" />
-              </div>
               <div>
                 <Label>Unit #</Label>
                 <Input value={form.unitNumber} onChange={e => setForm((f: any) => ({ ...f, unitNumber: e.target.value }))} data-testid="input-unit" />
