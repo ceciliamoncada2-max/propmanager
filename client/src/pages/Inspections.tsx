@@ -152,8 +152,22 @@ export default function Inspections() {
                   <div className="flex items-center justify-between gap-4">
                     <div>
                       <div className="flex items-center gap-2">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${insp.type === "move_in" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"}`}>
-                          {insp.type === "move_in" ? "Move-In" : "Move-Out"}
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                          insp.type === "move_in" ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300" :
+                          insp.type === "move_out" ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300" :
+                          insp.type === "maintenance_check" ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300" :
+                          insp.type === "exterior" ? "bg-teal-100 text-teal-700 dark:bg-teal-900/30 dark:text-teal-300" :
+                          insp.type === "periodic" ? "bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300" :
+                          insp.type === "quick_condition" ? "bg-slate-100 text-slate-700 dark:bg-slate-900/30 dark:text-slate-300" :
+                          "bg-muted text-muted-foreground"
+                        }`}>
+                          {insp.type === "move_in" ? "Move-In" :
+                           insp.type === "move_out" ? "Move-Out" :
+                           insp.type === "maintenance_check" ? "Maintenance Check" :
+                           insp.type === "exterior" ? "Exterior" :
+                           insp.type === "periodic" ? "Periodic" :
+                           insp.type === "quick_condition" ? "Quick Condition Check" :
+                           insp.type}
                         </span>
                         {insp.importedFrom === "rentcheck" && <span className="text-xs bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 px-2 py-0.5 rounded-full">RentCheck</span>}
                       </div>
@@ -193,6 +207,10 @@ export default function Inspections() {
                   <SelectContent>
                     <SelectItem value="move_in">Move-In</SelectItem>
                     <SelectItem value="move_out">Move-Out</SelectItem>
+                    <SelectItem value="maintenance_check">Maintenance Check</SelectItem>
+                    <SelectItem value="exterior">Exterior</SelectItem>
+                    <SelectItem value="periodic">Periodic</SelectItem>
+                    <SelectItem value="quick_condition">Quick Condition Check</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -233,6 +251,10 @@ export default function Inspections() {
                   <SelectContent>
                     <SelectItem value="move_in">Move-In</SelectItem>
                     <SelectItem value="move_out">Move-Out</SelectItem>
+                    <SelectItem value="maintenance_check">Maintenance Check</SelectItem>
+                    <SelectItem value="exterior">Exterior</SelectItem>
+                    <SelectItem value="periodic">Periodic</SelectItem>
+                    <SelectItem value="quick_condition">Quick Condition Check</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
