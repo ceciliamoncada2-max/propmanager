@@ -58,8 +58,8 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.set("Cache-Control", "no-store, no-cache, must-revalidate");
     res.set("Pragma", "no-cache");
     const landlordPassword = process.env.LANDLORD_PASSWORD;
-    if (!landlordPassword) return res.json({ authed: true, debug: "no_password_set" }); // no password set
-    res.json({ authed: !!(req.session as any).landlordAuthed, debug: "password_set" });
+    if (!landlordPassword) return res.json({ authed: true }); // no password set
+    res.json({ authed: !!(req.session as any).landlordAuthed });
   });
 
   app.post("/api/auth/logout", (req, res) => {
