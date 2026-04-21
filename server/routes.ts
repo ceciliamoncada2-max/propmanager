@@ -30,6 +30,19 @@ function randomPortalCode(): string {
 }
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // ---- Health check ----
+  app.get("/api/health", async (_req, res) => {
+    try {
+      const { Pool } = await import("pg");
+      const p = new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+      await p.query("SELECT 1");
+      await p.end();
+      res.json({ ok: true, db: "connected", url: process.env.DATABASE_URL?.substring(0, 30) + "..." });
+    } catch (e: any) {
+      res.json({ ok: false, error: e.message, url: process.env.DATABASE_URL?.substring(0, 30) + "..." });
+    }
+  });
+
   // ---- Properties ----
   app.get("/api/properties", async (_req, res) => {
     res.json(await storage.getProperties());
