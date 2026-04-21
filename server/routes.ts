@@ -335,6 +335,31 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     res.json({ ok: true });
   });
 
+  // ---- Inspection Item Photos ----
+  app.get("/api/inspection-items/:id/photos", async (req, res) => {
+    res.json(await storage.getInspectionItemPhotos(Number(req.params.id)));
+  });
+
+  app.post("/api/inspection-items/:id/photos", upload.array("photos", 10), async (req, res) => {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) return res.status(400).json({ error: "No files uploaded" });
+    const itemId = Number(req.params.id);
+    const saved = await Promise.all(files.map(f =>
+      storage.createInspectionItemPhoto({
+        inspectionItemId: itemId,
+        filename: f.filename,
+        originalName: f.originalname,
+        uploadedAt: new Date().toISOString(),
+      })
+    ));
+    res.json(saved);
+  });
+
+  app.delete("/api/inspection-items/photos/:photoId", async (req, res) => {
+    await storage.deleteInspectionItemPhoto(Number(req.params.photoId));
+    res.json({ ok: true });
+  });
+
   // ---- Lease Reference Search ----
   app.get("/api/lease/search", (req, res) => {
     const q = String(req.query.q || "").trim();

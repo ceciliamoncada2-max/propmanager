@@ -61,6 +61,10 @@ async function initDb() {
       id SERIAL PRIMARY KEY, maintenance_request_id INTEGER NOT NULL,
       filename TEXT NOT NULL, original_name TEXT, uploaded_at TEXT NOT NULL, caption TEXT
     );
+    CREATE TABLE IF NOT EXISTS inspection_item_photos (
+      id SERIAL PRIMARY KEY, inspection_item_id INTEGER NOT NULL,
+      filename TEXT NOT NULL, original_name TEXT, uploaded_at TEXT NOT NULL, caption TEXT
+    );
   `);
 }
 
@@ -113,6 +117,10 @@ function mapPhoto(r: any): MaintenancePhoto {
   return { id: r.id, maintenanceRequestId: r.maintenance_request_id, filename: r.filename,
     originalName: r.original_name, uploadedAt: r.uploaded_at, caption: r.caption };
 }
+function mapInspectionPhoto(r: any) {
+  return { id: r.id, inspectionItemId: r.inspection_item_id, filename: r.filename,
+    originalName: r.original_name, uploadedAt: r.uploaded_at, caption: r.caption };
+}
 
 export interface IStorage {
   getProperties(): Promise<Property[]>;
@@ -150,6 +158,9 @@ export interface IStorage {
   getMaintenancePhotos(maintenanceRequestId: number): Promise<MaintenancePhoto[]>;
   createMaintenancePhoto(data: InsertMaintenancePhoto): Promise<MaintenancePhoto>;
   deleteMaintenancePhoto(id: number): Promise<void>;
+  getInspectionItemPhotos(inspectionItemId: number): Promise<any[]>;
+  createInspectionItemPhoto(data: { inspectionItemId: number; filename: string; originalName?: string; uploadedAt: string; caption?: string }): Promise<any>;
+  deleteInspectionItemPhoto(id: number): Promise<void>;
 }
 
 export class PgStorage implements IStorage {
@@ -218,6 +229,11 @@ export class PgStorage implements IStorage {
   async getMaintenancePhotos(maintenanceRequestId: number) { const r = await pool.query(`SELECT * FROM maintenance_photos WHERE maintenance_request_id=$1 ORDER BY id`,[maintenanceRequestId]); return r.rows.map(mapPhoto); }
   async createMaintenancePhoto(d: InsertMaintenancePhoto) { const r = await pool.query(`INSERT INTO maintenance_photos (maintenance_request_id,filename,original_name,uploaded_at,caption) VALUES ($1,$2,$3,$4,$5) RETURNING *`,[d.maintenanceRequestId,d.filename,d.originalName??null,d.uploadedAt,d.caption??null]); return mapPhoto(r.rows[0]); }
   async deleteMaintenancePhoto(id: number) { await pool.query(`DELETE FROM maintenance_photos WHERE id=$1`,[id]); }
+
+  // Inspection Item Photos
+  async getInspectionItemPhotos(inspectionItemId: number) { const r = await pool.query(`SELECT * FROM inspection_item_photos WHERE inspection_item_id=$1 ORDER BY id`,[inspectionItemId]); return r.rows.map(mapInspectionPhoto); }
+  async createInspectionItemPhoto(d: { inspectionItemId: number; filename: string; originalName?: string; uploadedAt: string; caption?: string }) { const r = await pool.query(`INSERT INTO inspection_item_photos (inspection_item_id,filename,original_name,uploaded_at,caption) VALUES ($1,$2,$3,$4,$5) RETURNING *`,[d.inspectionItemId,d.filename,d.originalName??null,d.uploadedAt,d.caption??null]); return mapInspectionPhoto(r.rows[0]); }
+  async deleteInspectionItemPhoto(id: number) { await pool.query(`DELETE FROM inspection_item_photos WHERE id=$1`,[id]); }
 }
 
 export const storage = new PgStorage();

@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useParams, Link } from "wouter";
-import { ArrowLeft, Save, DollarSign, AlertTriangle, CheckCircle2, Wrench } from "lucide-react";
+import { ArrowLeft, Save, DollarSign, AlertTriangle, CheckCircle2, Wrench, Camera, Trash2, ImagePlus } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -29,6 +29,9 @@ export default function InspectionDetail() {
   const [saving, setSaving] = useState<Set<number>>(new Set());
   const [maintDialog, setMaintDialog] = useState<MaintPrefill>(null);
   const [maintForm, setMaintForm] = useState({ category: "General", urgency: "medium", title: "", description: "" });
+  const [uploadingItemId, setUploadingItemId] = useState<number | null>(null);
+  const [itemPhotos, setItemPhotos] = useState<Record<number, any[]>>({});
+  const [expandedPhotos, setExpandedPhotos] = useState<Set<number>>(new Set());
 
   const { data: inspection } = useQuery<any>({ queryKey: ["/api/inspections", Number(id)], queryFn: async () => { const r = await fetch(`/api/inspections/${id}`); return r.json(); } });
   const { data: items = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/inspections", Number(id), "items"], queryFn: async () => { const r = await fetch(`/api/inspections/${id}/items`); return r.json(); } });
@@ -81,6 +84,36 @@ export default function InspectionDetail() {
       location: maintDialog.area,
       submittedAt: new Date().toISOString(),
       status: "open",
+    });
+  }
+
+  async function loadPhotos(itemId: number) {
+    const r = await fetch(`/api/inspection-items/${itemId}/photos`);
+    const photos = await r.json();
+    setItemPhotos(prev => ({ ...prev, [itemId]: photos }));
+  }
+
+  async function handlePhotoUpload(itemId: number, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setUploadingItemId(itemId);
+    const fd = new FormData();
+    Array.from(files).forEach(f => fd.append("photos", f));
+    await fetch(`/api/inspection-items/${itemId}/photos`, { method: "POST", body: fd });
+    await loadPhotos(itemId);
+    setUploadingItemId(null);
+    setExpandedPhotos(prev => new Set(prev).add(itemId));
+  }
+
+  async function deletePhoto(itemId: number, photoId: number) {
+    await fetch(`/api/inspection-items/photos/${photoId}`, { method: "DELETE" });
+    await loadPhotos(itemId);
+  }
+
+  function togglePhotos(itemId: number) {
+    setExpandedPhotos(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) { next.delete(itemId); } else { next.add(itemId); loadPhotos(itemId); }
+      return next;
     });
   }
 
@@ -239,6 +272,65 @@ export default function InspectionDetail() {
                             data-testid={`input-notes-${item.id}`}
                           />
                         </div>
+                        {/* Photo upload row */}
+                        <div className="mt-2 flex items-center gap-2">
+                          <label className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border border-border bg-muted hover:bg-secondary transition-colors">
+                            {uploadingItemId === item.id ? (
+                              <span className="text-xs text-muted-foreground">Uploading...</span>
+                            ) : (
+                              <><ImagePlus size={12} /> Add Photos</>
+                            )}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              capture="environment"
+                              className="hidden"
+                              onChange={e => handlePhotoUpload(item.id, e.target.files)}
+                              data-testid={`input-photo-${item.id}`}
+                            />
+                          </label>
+                          <label className="cursor-pointer flex items-center gap-1 px-2 py-1 rounded text-xs font-medium border border-border bg-muted hover:bg-secondary transition-colors">
+                            <Camera size={12} /> Camera
+                            <input
+                              type="file"
+                              accept="image/*"
+                              capture="environment"
+                              className="hidden"
+                              onChange={e => handlePhotoUpload(item.id, e.target.files)}
+                            />
+                          </label>
+                          {(itemPhotos[item.id]?.length > 0) && (
+                            <button
+                              type="button"
+                              onClick={() => togglePhotos(item.id)}
+                              className="text-xs text-primary underline"
+                            >
+                              {expandedPhotos.has(item.id) ? "Hide" : `View ${itemPhotos[item.id].length} photo${itemPhotos[item.id].length !== 1 ? "s" : ""}`}
+                            </button>
+                          )}
+                        </div>
+                        {/* Photo thumbnails */}
+                        {expandedPhotos.has(item.id) && itemPhotos[item.id]?.length > 0 && (
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {itemPhotos[item.id].map((photo: any) => (
+                              <div key={photo.id} className="relative group">
+                                <img
+                                  src={`/uploads/${photo.filename}`}
+                                  alt={photo.originalName || "Inspection photo"}
+                                  className="w-20 h-20 object-cover rounded border border-border"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => deletePhoto(item.id, photo.id)}
+                                  className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <Trash2 size={10} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
