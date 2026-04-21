@@ -30,7 +30,40 @@ function randomPortalCode(): string {
   return Math.random().toString(36).substring(2, 8).toUpperCase();
 }
 
+// Extend session type
+declare module "express-session" {
+  interface SessionData {
+    landlordAuthed?: boolean;
+  }
+}
+
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
+  // ---- Auth ----
+  app.post("/api/auth/login", (req, res) => {
+    const { password } = req.body;
+    const landlordPassword = process.env.LANDLORD_PASSWORD;
+    if (!landlordPassword) {
+      // No password set — allow access (backwards compat)
+      (req.session as any).landlordAuthed = true;
+      return res.json({ ok: true });
+    }
+    if (password === landlordPassword) {
+      (req.session as any).landlordAuthed = true;
+      return res.json({ ok: true });
+    }
+    return res.status(401).json({ error: "Incorrect password" });
+  });
+
+  app.get("/api/auth/check", (req, res) => {
+    const landlordPassword = process.env.LANDLORD_PASSWORD;
+    if (!landlordPassword) return res.json({ authed: true }); // no password set
+    res.json({ authed: !!(req.session as any).landlordAuthed });
+  });
+
+  app.post("/api/auth/logout", (req, res) => {
+    req.session.destroy(() => res.json({ ok: true }));
+  });
+
   // ---- Health check ----
   app.get("/api/health", async (_req, res) => {
     try {

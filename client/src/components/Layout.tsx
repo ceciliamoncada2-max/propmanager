@@ -1,5 +1,5 @@
 import { useLocation, Link } from "wouter";
-import { Home, Building2, Users, ClipboardList, DollarSign, Wrench, Moon, Sun, Menu, X } from "lucide-react";
+import { Home, Building2, Users, ClipboardList, DollarSign, Wrench, Moon, Sun, Menu, X, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 
 const navItems = [
@@ -45,7 +45,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           ))}
         </nav>
 
-        <div className="mt-auto px-3">
+        <div className="mt-auto px-3 flex flex-col gap-1">
           <button
             onClick={() => setDark(d => !d)}
             className="sidebar-link w-full"
@@ -54,6 +54,18 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           >
             {dark ? <Sun size={17} /> : <Moon size={17} />}
             {dark ? "Light Mode" : "Dark Mode"}
+          </button>
+          <button
+            onClick={async () => {
+              await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+              window.location.reload();
+            }}
+            className="sidebar-link w-full text-red-400 hover:text-red-300"
+            aria-label="Logout"
+            data-testid="logout-button"
+          >
+            <LogOut size={17} />
+            Lock App
           </button>
         </div>
       </aside>
