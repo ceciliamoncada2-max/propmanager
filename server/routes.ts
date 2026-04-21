@@ -11,13 +11,11 @@ import {
   insertDepositEntrySchema, insertInspectionSchema, insertInspectionItemSchema,
   insertMaintenanceRequestSchema,
 } from "@shared/schema";
-import { z } from "zod";
 
 // Ensure uploads directory exists
 const UPLOADS_DIR = path.join(process.cwd(), "uploads");
 if (!fs.existsSync(UPLOADS_DIR)) fs.mkdirSync(UPLOADS_DIR, { recursive: true });
 
-// Multer config — store on disk, limit 10MB per file, images only
 const upload = multer({
   dest: UPLOADS_DIR,
   limits: { fileSize: 10 * 1024 * 1024, files: 5 },
@@ -33,69 +31,68 @@ function randomPortalCode(): string {
 
 export async function registerRoutes(httpServer: Server, app: Express): Promise<Server> {
   // ---- Properties ----
-  app.get("/api/properties", (_req, res) => {
-    res.json(storage.getProperties());
+  app.get("/api/properties", async (_req, res) => {
+    res.json(await storage.getProperties());
   });
-  app.get("/api/properties/:id", (req, res) => {
-    const p = storage.getProperty(Number(req.params.id));
+  app.get("/api/properties/:id", async (req, res) => {
+    const p = await storage.getProperty(Number(req.params.id));
     if (!p) return res.status(404).json({ error: "Not found" });
     res.json(p);
   });
-  app.post("/api/properties", (req, res) => {
+  app.post("/api/properties", async (req, res) => {
     const data = insertPropertySchema.parse(req.body);
-    res.json(storage.createProperty(data));
+    res.json(await storage.createProperty(data));
   });
-  app.patch("/api/properties/:id", (req, res) => {
-    const p = storage.updateProperty(Number(req.params.id), req.body);
+  app.patch("/api/properties/:id", async (req, res) => {
+    const p = await storage.updateProperty(Number(req.params.id), req.body);
     if (!p) return res.status(404).json({ error: "Not found" });
     res.json(p);
   });
-  app.delete("/api/properties/:id", (req, res) => {
-    storage.deleteProperty(Number(req.params.id));
+  app.delete("/api/properties/:id", async (req, res) => {
+    await storage.deleteProperty(Number(req.params.id));
     res.json({ ok: true });
   });
 
   // ---- Tenants ----
-  app.get("/api/tenants", (req, res) => {
+  app.get("/api/tenants", async (req, res) => {
     const propertyId = req.query.propertyId ? Number(req.query.propertyId) : undefined;
-    res.json(storage.getTenants(propertyId));
+    res.json(await storage.getTenants(propertyId));
   });
-  app.get("/api/tenants/:id", (req, res) => {
-    const t = storage.getTenant(Number(req.params.id));
+  app.get("/api/tenants/:id", async (req, res) => {
+    const t = await storage.getTenant(Number(req.params.id));
     if (!t) return res.status(404).json({ error: "Not found" });
     res.json(t);
   });
-  app.post("/api/tenants", (req, res) => {
+  app.post("/api/tenants", async (req, res) => {
     const body = { ...req.body, portalCode: req.body.portalCode || randomPortalCode() };
     const data = insertTenantSchema.parse(body);
-    res.json(storage.createTenant(data));
+    res.json(await storage.createTenant(data));
   });
-  app.patch("/api/tenants/:id", (req, res) => {
-    const t = storage.updateTenant(Number(req.params.id), req.body);
+  app.patch("/api/tenants/:id", async (req, res) => {
+    const t = await storage.updateTenant(Number(req.params.id), req.body);
     if (!t) return res.status(404).json({ error: "Not found" });
     res.json(t);
   });
 
   // ---- Deposits ----
-  app.get("/api/deposits", (req, res) => {
+  app.get("/api/deposits", async (req, res) => {
     const tenantId = req.query.tenantId ? Number(req.query.tenantId) : undefined;
-    res.json(storage.getDeposits(tenantId));
+    res.json(await storage.getDeposits(tenantId));
   });
-  app.get("/api/deposits/:id", (req, res) => {
-    const d = storage.getDeposit(Number(req.params.id));
+  app.get("/api/deposits/:id", async (req, res) => {
+    const d = await storage.getDeposit(Number(req.params.id));
     if (!d) return res.status(404).json({ error: "Not found" });
     res.json(d);
   });
-  app.get("/api/tenants/:tenantId/deposit", (req, res) => {
-    const d = storage.getDepositByTenant(Number(req.params.tenantId));
+  app.get("/api/tenants/:tenantId/deposit", async (req, res) => {
+    const d = await storage.getDepositByTenant(Number(req.params.tenantId));
     if (!d) return res.status(404).json({ error: "Not found" });
     res.json(d);
   });
-  app.post("/api/deposits", (req, res) => {
+  app.post("/api/deposits", async (req, res) => {
     const data = insertDepositSchema.parse(req.body);
-    const deposit = storage.createDeposit(data);
-    // Auto-create initial entry
-    storage.createDepositEntry({
+    const deposit = await storage.createDeposit(data);
+    await storage.createDepositEntry({
       depositId: deposit.id,
       date: deposit.dateReceived,
       entryType: "Deposit Received",
@@ -105,87 +102,77 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
     });
     res.json(deposit);
   });
-  app.patch("/api/deposits/:id", (req, res) => {
-    const d = storage.updateDeposit(Number(req.params.id), req.body);
+  app.patch("/api/deposits/:id", async (req, res) => {
+    const d = await storage.updateDeposit(Number(req.params.id), req.body);
     if (!d) return res.status(404).json({ error: "Not found" });
     res.json(d);
   });
 
   // ---- Deposit Entries ----
-  app.get("/api/deposits/:depositId/entries", (req, res) => {
-    res.json(storage.getDepositEntries(Number(req.params.depositId)));
+  app.get("/api/deposits/:depositId/entries", async (req, res) => {
+    res.json(await storage.getDepositEntries(Number(req.params.depositId)));
   });
-  app.post("/api/deposits/:depositId/entries", (req, res) => {
+  app.post("/api/deposits/:depositId/entries", async (req, res) => {
     const depositId = Number(req.params.depositId);
-    const deposit = storage.getDeposit(depositId);
+    const deposit = await storage.getDeposit(depositId);
     if (!deposit) return res.status(404).json({ error: "Deposit not found" });
-
-    const entries = storage.getDepositEntries(depositId);
+    const entries = await storage.getDepositEntries(depositId);
     const currentBalance = entries.length > 0
       ? (entries[entries.length - 1].runningBalance ?? deposit.amount)
       : deposit.amount;
-
     const body = req.body;
     const deduction = body.deduction ? Number(body.deduction) : 0;
     const addition = body.addition ? Number(body.addition) : 0;
     const newBalance = currentBalance - deduction + addition;
-
-    const data = insertDepositEntrySchema.parse({
-      ...body,
-      depositId,
-      runningBalance: newBalance,
-    });
-    res.json(storage.createDepositEntry(data));
+    const data = insertDepositEntrySchema.parse({ ...body, depositId, runningBalance: newBalance });
+    res.json(await storage.createDepositEntry(data));
   });
-  app.patch("/api/deposit-entries/:id", (req, res) => {
-    const e = storage.updateDepositEntry(Number(req.params.id), req.body);
+  app.patch("/api/deposit-entries/:id", async (req, res) => {
+    const e = await storage.updateDepositEntry(Number(req.params.id), req.body);
     if (!e) return res.status(404).json({ error: "Not found" });
     res.json(e);
   });
-  app.delete("/api/deposit-entries/:id", (req, res) => {
-    storage.deleteDepositEntry(Number(req.params.id));
+  app.delete("/api/deposit-entries/:id", async (req, res) => {
+    await storage.deleteDepositEntry(Number(req.params.id));
     res.json({ ok: true });
   });
 
   // ---- Inspections ----
-  app.get("/api/inspections", (req, res) => {
+  app.get("/api/inspections", async (req, res) => {
     const propertyId = req.query.propertyId ? Number(req.query.propertyId) : undefined;
     const tenantId = req.query.tenantId ? Number(req.query.tenantId) : undefined;
-    res.json(storage.getInspections(propertyId, tenantId));
+    res.json(await storage.getInspections(propertyId, tenantId));
   });
-  app.get("/api/inspections/:id", (req, res) => {
-    const insp = storage.getInspection(Number(req.params.id));
+  app.get("/api/inspections/:id", async (req, res) => {
+    const insp = await storage.getInspection(Number(req.params.id));
     if (!insp) return res.status(404).json({ error: "Not found" });
     res.json(insp);
   });
-  app.post("/api/inspections", (req, res) => {
+  app.post("/api/inspections", async (req, res) => {
     const data = insertInspectionSchema.parse(req.body);
-    const insp = storage.createInspection(data);
-
-    // If creating a fresh inspection, seed with default checklist items
+    const insp = await storage.createInspection(data);
     if (!req.body.skipSeed) {
       const defaultItems = getDefaultInspectionItems(insp.id);
-      storage.bulkCreateInspectionItems(defaultItems);
+      await storage.bulkCreateInspectionItems(defaultItems);
     }
     res.json(insp);
   });
-  app.patch("/api/inspections/:id", (req, res) => {
-    const insp = storage.updateInspection(Number(req.params.id), req.body);
+  app.patch("/api/inspections/:id", async (req, res) => {
+    const insp = await storage.updateInspection(Number(req.params.id), req.body);
     if (!insp) return res.status(404).json({ error: "Not found" });
-    // Recalculate total cost
-    const items = storage.getInspectionItems(insp.id);
+    const items = await storage.getInspectionItems(insp.id);
     const total = items.reduce((sum, i) => sum + (i.estimatedRepairCost || 0), 0);
-    storage.updateInspection(insp.id, { totalEstimatedCost: total });
+    await storage.updateInspection(insp.id, { totalEstimatedCost: total });
     res.json({ ...insp, totalEstimatedCost: total });
   });
 
   // RentCheck import
-  app.post("/api/inspections/import-rentcheck", (req, res) => {
+  app.post("/api/inspections/import-rentcheck", async (req, res) => {
     const { tenantId, propertyId, type, inspectionDate, inspectorName, items } = req.body;
     if (!tenantId || !propertyId || !items?.length) {
       return res.status(400).json({ error: "Missing required fields" });
     }
-    const insp = storage.createInspection({
+    const insp = await storage.createInspection({
       tenantId: Number(tenantId),
       propertyId: Number(propertyId),
       type: type || "move_out",
@@ -194,7 +181,6 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       importedFrom: "rentcheck",
       rawImportData: JSON.stringify(items),
     });
-
     const mappedItems = items.map((item: any) => ({
       inspectionId: insp.id,
       area: item.area || item.room || "General",
@@ -205,104 +191,95 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       estimatedRepairCost: Number(item.estimatedRepairCost || item.cost || 0),
       photoNotes: item.photoNotes || null,
     }));
-
-    const created = storage.bulkCreateInspectionItems(mappedItems);
+    const created = await storage.bulkCreateInspectionItems(mappedItems);
     const total = created.reduce((sum, i) => sum + (i.estimatedRepairCost || 0), 0);
-    storage.updateInspection(insp.id, { totalEstimatedCost: total });
-
+    await storage.updateInspection(insp.id, { totalEstimatedCost: total });
     res.json({ inspection: { ...insp, totalEstimatedCost: total }, items: created });
   });
 
   // ---- Inspection Items ----
-  app.get("/api/inspections/:inspectionId/items", (req, res) => {
-    res.json(storage.getInspectionItems(Number(req.params.inspectionId)));
+  app.get("/api/inspections/:inspectionId/items", async (req, res) => {
+    res.json(await storage.getInspectionItems(Number(req.params.inspectionId)));
   });
-  app.post("/api/inspections/:inspectionId/items", (req, res) => {
+  app.post("/api/inspections/:inspectionId/items", async (req, res) => {
     const data = insertInspectionItemSchema.parse({ ...req.body, inspectionId: Number(req.params.inspectionId) });
-    const item = storage.createInspectionItem(data);
-    // Update total on inspection
-    const items = storage.getInspectionItems(item.inspectionId);
+    const item = await storage.createInspectionItem(data);
+    const items = await storage.getInspectionItems(item.inspectionId);
     const total = items.reduce((sum, i) => sum + (i.estimatedRepairCost || 0), 0);
-    storage.updateInspection(item.inspectionId, { totalEstimatedCost: total });
+    await storage.updateInspection(item.inspectionId, { totalEstimatedCost: total });
     res.json(item);
   });
-  app.patch("/api/inspection-items/:id", (req, res) => {
-    const item = storage.updateInspectionItem(Number(req.params.id), req.body);
+  app.patch("/api/inspection-items/:id", async (req, res) => {
+    const item = await storage.updateInspectionItem(Number(req.params.id), req.body);
     if (!item) return res.status(404).json({ error: "Not found" });
-    // Update total
-    const items = storage.getInspectionItems(item.inspectionId);
+    const items = await storage.getInspectionItems(item.inspectionId);
     const total = items.reduce((sum, i) => sum + (i.estimatedRepairCost || 0), 0);
-    storage.updateInspection(item.inspectionId, { totalEstimatedCost: total });
+    await storage.updateInspection(item.inspectionId, { totalEstimatedCost: total });
     res.json(item);
   });
-  app.delete("/api/inspection-items/:id", (req, res) => {
-    storage.deleteInspectionItem(Number(req.params.id));
+  app.delete("/api/inspection-items/:id", async (req, res) => {
+    await storage.deleteInspectionItem(Number(req.params.id));
     res.json({ ok: true });
   });
 
   // ---- Excel Export ----
-  app.get("/api/export/deposit/:tenantId", (req, res) => {
+  app.get("/api/export/deposit/:tenantId", async (req, res) => {
     const tenantId = Number(req.params.tenantId);
-    const tenant = storage.getTenant(tenantId);
+    const tenant = await storage.getTenant(tenantId);
     if (!tenant) return res.status(404).json({ error: "Tenant not found" });
-
-    const property = storage.getProperty(tenant.propertyId);
+    const property = await storage.getProperty(tenant.propertyId);
     if (!property) return res.status(404).json({ error: "Property not found" });
-
-    const deposit = storage.getDepositByTenant(tenantId);
+    const deposit = await storage.getDepositByTenant(tenantId);
     if (!deposit) return res.status(404).json({ error: "No deposit on file" });
-
-    const entries = storage.getDepositEntries(deposit.id);
-    const inspList = storage.getInspections(undefined, tenantId);
+    const entries = await storage.getDepositEntries(deposit.id);
+    const inspList = await storage.getInspections(undefined, tenantId);
     const moveOut = inspList.find(i => i.type === "move_out");
-    const items = moveOut ? storage.getInspectionItems(moveOut.id) : [];
-    const maintRequests = storage.getMaintenanceRequests(undefined, tenantId);
-
+    const items = moveOut ? await storage.getInspectionItems(moveOut.id) : [];
+    const maintRequests = await storage.getMaintenanceRequests(undefined, tenantId);
     const buf = generateDepositTrackerXlsx(tenant, property, deposit, entries, moveOut, items, maintRequests);
-
     res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
     res.setHeader("Content-Disposition", `attachment; filename="deposit-tracker-${tenant.name.replace(/\s+/g, "-")}.xlsx"`);
     res.send(buf);
   });
 
   // ---- Maintenance Requests ----
-  app.get("/api/maintenance", (req, res) => {
+  app.get("/api/maintenance", async (req, res) => {
     const propertyId = req.query.propertyId ? Number(req.query.propertyId) : undefined;
     const tenantId = req.query.tenantId ? Number(req.query.tenantId) : undefined;
-    res.json(storage.getMaintenanceRequests(propertyId, tenantId));
+    res.json(await storage.getMaintenanceRequests(propertyId, tenantId));
   });
-  app.get("/api/maintenance/:id", (req, res) => {
-    const r = storage.getMaintenanceRequest(Number(req.params.id));
+  app.get("/api/maintenance/:id", async (req, res) => {
+    const r = await storage.getMaintenanceRequest(Number(req.params.id));
     if (!r) return res.status(404).json({ error: "Not found" });
     res.json(r);
   });
-  app.post("/api/maintenance", (req, res) => {
+  app.post("/api/maintenance", async (req, res) => {
     const data = insertMaintenanceRequestSchema.parse({
       ...req.body,
       submittedAt: new Date().toISOString(),
     });
-    res.json(storage.createMaintenanceRequest(data));
+    res.json(await storage.createMaintenanceRequest(data));
   });
-  app.patch("/api/maintenance/:id", (req, res) => {
+  app.patch("/api/maintenance/:id", async (req, res) => {
     const body = req.body;
     if (body.status === "resolved" && !body.resolvedAt) {
       body.resolvedAt = new Date().toISOString();
     }
-    const r = storage.updateMaintenanceRequest(Number(req.params.id), body);
+    const r = await storage.updateMaintenanceRequest(Number(req.params.id), body);
     if (!r) return res.status(404).json({ error: "Not found" });
     res.json(r);
   });
 
-  // ---- Tenant Portal (public lookup by portal code) ----
-  app.get("/api/portal/:code", (req, res) => {
-    const tenant = storage.getTenantByPortalCode(req.params.code);
+  // ---- Tenant Portal ----
+  app.get("/api/portal/:code", async (req, res) => {
+    const tenant = await storage.getTenantByPortalCode(req.params.code);
     if (!tenant) return res.status(404).json({ error: "Invalid portal code" });
-    const property = storage.getProperty(tenant.propertyId);
-    const requests = storage.getMaintenanceRequests(undefined, tenant.id);
+    const property = await storage.getProperty(tenant.propertyId);
+    const requests = await storage.getMaintenanceRequests(undefined, tenant.id);
     res.json({ tenant, property, requests });
   });
-  app.post("/api/portal/:code/maintenance", (req, res) => {
-    const tenant = storage.getTenantByPortalCode(req.params.code);
+  app.post("/api/portal/:code/maintenance", async (req, res) => {
+    const tenant = await storage.getTenantByPortalCode(req.params.code);
     if (!tenant) return res.status(404).json({ error: "Invalid portal code" });
     const data = insertMaintenanceRequestSchema.parse({
       ...req.body,
@@ -311,75 +288,61 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       submittedAt: new Date().toISOString(),
       status: "open",
     });
-    res.json(storage.createMaintenanceRequest(data));
+    res.json(await storage.createMaintenanceRequest(data));
   });
 
   // ---- Photo Uploads ----
-  // Serve uploaded files as static assets
-  app.use("/uploads", (req, res, next) => {
-    // Basic path traversal protection
+  app.use("/uploads", (req, res) => {
     const safePath = path.normalize(req.path).replace(/^\/+/, "");
     if (safePath.includes("..")) return res.status(403).send("Forbidden");
     res.sendFile(path.join(UPLOADS_DIR, safePath));
   });
 
-  // POST /api/maintenance/:id/photos  — upload up to 5 photos
-  app.post("/api/maintenance/:id/photos", upload.array("photos", 5), (req, res) => {
+  app.post("/api/maintenance/:id/photos", upload.array("photos", 5), async (req, res) => {
     const requestId = Number(req.params.id);
-    const maint = storage.getMaintenanceRequest(requestId);
+    const maint = await storage.getMaintenanceRequest(requestId);
     if (!maint) return res.status(404).json({ error: "Request not found" });
-
     const files = req.files as Express.Multer.File[];
     if (!files || files.length === 0) return res.status(400).json({ error: "No files uploaded" });
-
-    const saved = files.map(file => storage.createMaintenancePhoto({
+    const saved = await Promise.all(files.map(file => storage.createMaintenancePhoto({
       maintenanceRequestId: requestId,
       filename: file.filename,
       originalName: file.originalname,
       uploadedAt: new Date().toISOString(),
-    }));
+    })));
     res.json(saved);
   });
 
-  // GET /api/maintenance/:id/photos
-  app.get("/api/maintenance/:id/photos", (req, res) => {
-    const requestId = Number(req.params.id);
-    res.json(storage.getMaintenancePhotos(requestId));
+  app.get("/api/maintenance/:id/photos", async (req, res) => {
+    res.json(await storage.getMaintenancePhotos(Number(req.params.id)));
   });
 
-  // DELETE /api/maintenance/photos/:photoId
-  app.delete("/api/maintenance/photos/:photoId", (req, res) => {
-    const photoId = Number(req.params.photoId);
-    const photos = storage.getMaintenancePhotos(0); // we need a way to get by id
-    // Get all photos and find this one to delete the file
-    try {
-      storage.deleteMaintenancePhoto(photoId);
-    } catch {}
+  app.delete("/api/maintenance/photos/:photoId", async (req, res) => {
+    await storage.deleteMaintenancePhoto(Number(req.params.photoId));
     res.json({ ok: true });
   });
 
   // ---- Lease Reference Search ----
-  // GET /api/lease/search?q=clog&state=TX  → top matching clauses
   app.get("/api/lease/search", (req, res) => {
     const q = String(req.query.q || "").trim();
     const state = (req.query.state as "TX" | "NJ") || "TX";
     if (!q) return res.json([]);
     res.json(searchLeaseClauses(q, state));
   });
-
-  // GET /api/lease/category/:category?state=TX  → clauses for a maintenance category
   app.get("/api/lease/category/:category", (req, res) => {
     const category = req.params.category;
     const state = (req.query.state as "TX" | "NJ") || "TX";
     res.json(getClausesForCategory(category, state));
   });
 
-  // ---- Dashboard Summary ----
-  app.get("/api/dashboard", (_req, res) => {
-    const allProperties = storage.getProperties();
-    const allTenants = storage.getTenants();
-    const allMaintenance = storage.getMaintenanceRequests();
-    const allDeposits = storage.getDeposits();
+  // ---- Dashboard ----
+  app.get("/api/dashboard", async (_req, res) => {
+    const [allProperties, allTenants, allMaintenance, allDeposits] = await Promise.all([
+      storage.getProperties(),
+      storage.getTenants(),
+      storage.getMaintenanceRequests(),
+      storage.getDeposits(),
+    ]);
     const openRequests = allMaintenance.filter(m => m.status === "open" || m.status === "in_progress");
     const emergencyRequests = allMaintenance.filter(m => m.urgency === "Emergency" && m.status === "open");
     res.json({
@@ -404,7 +367,6 @@ function getDefaultInspectionItems(inspectionId: number) {
     { area: "Bedrooms", items: ["Bedroom 1 — Walls / Floors", "Bedroom 2 — Walls / Floors", "Bedroom 3 — Walls / Floors"] },
     { area: "Systems", items: ["HVAC Filter — Replaced?", "Smoke Detectors — Working?", "CO Detectors — Working?", "Water Softener (if applicable)", "Keys / Remotes Returned"] },
   ];
-
   const items: any[] = [];
   areas.forEach(({ area, items: areaItems }) => {
     areaItems.forEach(item => {

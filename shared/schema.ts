@@ -1,13 +1,13 @@
-import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";
+import { pgTable, text, integer, real, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Properties
-export const properties = sqliteTable("properties", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const properties = pgTable("properties", {
+  id: serial("id").primaryKey(),
   address: text("address").notNull(),
   city: text("city").notNull(),
-  state: text("state").notNull(), // "TX" | "NJ" | "Other"
+  state: text("state").notNull(),
   zip: text("zip").notNull(),
   unitCount: integer("unit_count").default(1),
   notes: text("notes"),
@@ -18,8 +18,8 @@ export type InsertProperty = z.infer<typeof insertPropertySchema>;
 export type Property = typeof properties.$inferSelect;
 
 // Tenants
-export const tenants = sqliteTable("tenants", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const tenants = pgTable("tenants", {
+  id: serial("id").primaryKey(),
   propertyId: integer("property_id").notNull(),
   name: text("name").notNull(),
   email: text("email"),
@@ -29,8 +29,8 @@ export const tenants = sqliteTable("tenants", {
   leaseEnd: text("lease_end"),
   moveOutDate: text("move_out_date"),
   forwardingAddress: text("forwarding_address"),
-  portalCode: text("portal_code").notNull(), // unique code for tenant portal access
-  status: text("status").notNull().default("active"), // active | moved_out
+  portalCode: text("portal_code").notNull(),
+  status: text("status").notNull().default("active"),
 });
 
 export const insertTenantSchema = createInsertSchema(tenants).omit({ id: true });
@@ -38,16 +38,16 @@ export type InsertTenant = z.infer<typeof insertTenantSchema>;
 export type Tenant = typeof tenants.$inferSelect;
 
 // Security Deposits
-export const deposits = sqliteTable("deposits", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const deposits = pgTable("deposits", {
+  id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   propertyId: integer("property_id").notNull(),
   amount: real("amount").notNull(),
   dateReceived: text("date_received").notNull(),
   bankName: text("bank_name"),
   interestRate: real("interest_rate").default(0.01),
-  state: text("state").notNull(), // TX | NJ | Other
-  status: text("status").default("held"), // held | partially_returned | returned
+  state: text("state").notNull(),
+  status: text("status").default("held"),
 });
 
 export const insertDepositSchema = createInsertSchema(deposits).omit({ id: true });
@@ -55,11 +55,11 @@ export type InsertDeposit = z.infer<typeof insertDepositSchema>;
 export type Deposit = typeof deposits.$inferSelect;
 
 // Deposit Ledger Entries
-export const depositEntries = sqliteTable("deposit_entries", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const depositEntries = pgTable("deposit_entries", {
+  id: serial("id").primaryKey(),
   depositId: integer("deposit_id").notNull(),
   date: text("date").notNull(),
-  entryType: text("entry_type").notNull(), // Deposit Received | Interest Accrued | Deduction | Replenishment
+  entryType: text("entry_type").notNull(),
   description: text("description"),
   location: text("location"),
   deduction: real("deduction"),
@@ -73,32 +73,32 @@ export type InsertDepositEntry = z.infer<typeof insertDepositEntrySchema>;
 export type DepositEntry = typeof depositEntries.$inferSelect;
 
 // Inspections
-export const inspections = sqliteTable("inspections", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const inspections = pgTable("inspections", {
+  id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   propertyId: integer("property_id").notNull(),
-  type: text("type").notNull(), // move_in | move_out
+  type: text("type").notNull(),
   inspectionDate: text("inspection_date").notNull(),
   inspectorName: text("inspector_name"),
   notes: text("notes"),
   totalEstimatedCost: real("total_estimated_cost").default(0),
-  importedFrom: text("imported_from"), // "rentcheck" | null
-  rawImportData: text("raw_import_data"), // JSON of parsed RentCheck data
+  importedFrom: text("imported_from"),
+  rawImportData: text("raw_import_data"),
 });
 
 export const insertInspectionSchema = createInsertSchema(inspections).omit({ id: true });
 export type InsertInspection = z.infer<typeof insertInspectionSchema>;
 export type Inspection = typeof inspections.$inferSelect;
 
-// Inspection Items (per room/area)
-export const inspectionItems = sqliteTable("inspection_items", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+// Inspection Items
+export const inspectionItems = pgTable("inspection_items", {
+  id: serial("id").primaryKey(),
   inspectionId: integer("inspection_id").notNull(),
-  area: text("area").notNull(), // e.g. "Kitchen", "Bathroom 1"
-  item: text("item").notNull(), // e.g. "Walls / Cabinets"
-  condition: text("condition"), // E | G | F | P | N/A
+  area: text("area").notNull(),
+  item: text("item").notNull(),
+  condition: text("condition"),
   notes: text("notes"),
-  hasDamage: integer("has_damage").default(0), // 0/1 boolean
+  hasDamage: integer("has_damage").default(0),
   estimatedRepairCost: real("estimated_repair_cost").default(0),
   photoNotes: text("photo_notes"),
 });
@@ -107,39 +107,37 @@ export const insertInspectionItemSchema = createInsertSchema(inspectionItems).om
 export type InsertInspectionItem = z.infer<typeof insertInspectionItemSchema>;
 export type InspectionItem = typeof inspectionItems.$inferSelect;
 
-// Maintenance Requests (Tenant Portal)
-export const maintenanceRequests = sqliteTable("maintenance_requests", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+// Maintenance Requests
+export const maintenanceRequests = pgTable("maintenance_requests", {
+  id: serial("id").primaryKey(),
   tenantId: integer("tenant_id").notNull(),
   propertyId: integer("property_id").notNull(),
   submittedAt: text("submitted_at").notNull(),
-  category: text("category").notNull(), // Plumbing | HVAC | Electrical | Appliance | Pest | General | Other
-  urgency: text("urgency").notNull(), // Emergency | High | Normal | Low
+  category: text("category").notNull(),
+  urgency: text("urgency").notNull(),
   title: text("title").notNull(),
   description: text("description").notNull(),
-  location: text("location"), // room/area
-  status: text("status").notNull().default("open"), // open | in_progress | resolved | closed
+  location: text("location"),
+  status: text("status").notNull().default("open"),
   landlordNotes: text("landlord_notes"),
   resolvedAt: text("resolved_at"),
-  // ── Phase 2: Resolution & Contract Reference ──────────────────────────────
-  completionCost: real("completion_cost"),           // actual cost of repair
-  contractState: text("contract_state"),              // TX | NJ
-  contractPage: text("contract_page"),                // e.g. "7"
-  contractSection: text("contract_section"),          // e.g. "8.3"
-  contractSubsection: text("contract_subsection"),    // e.g. "(a)"
-  contractRelevantText: text("contract_relevant_text"), // excerpt from lease
-  depositDecision: text("deposit_decision"),          // Tenant | Landlord | Pending | NA
-  depositAmount: real("deposit_amount"),              // amount charged to deposit (if Tenant)
-  qboCategory: text("qbo_category"),                  // QBO expense account/category
-  qboExpenseId: text("qbo_expense_id"),               // QBO expense record ID (after sync)
-  resolutionNotes: text("resolution_notes"),          // landlord's final notes
+  completionCost: real("completion_cost"),
+  contractState: text("contract_state"),
+  contractPage: text("contract_page"),
+  contractSection: text("contract_section"),
+  contractSubsection: text("contract_subsection"),
+  contractRelevantText: text("contract_relevant_text"),
+  depositDecision: text("deposit_decision"),
+  depositAmount: real("deposit_amount"),
+  qboCategory: text("qbo_category"),
+  qboExpenseId: text("qbo_expense_id"),
+  resolutionNotes: text("resolution_notes"),
 });
 
 export const insertMaintenanceRequestSchema = createInsertSchema(maintenanceRequests).omit({ id: true });
 export type InsertMaintenanceRequest = z.infer<typeof insertMaintenanceRequestSchema>;
 export type MaintenanceRequest = typeof maintenanceRequests.$inferSelect;
 
-// QBO expense categories for maintenance
 export const QBO_EXPENSE_CATEGORIES = [
   "Repairs & Maintenance",
   "Plumbing",
@@ -156,16 +154,15 @@ export const QBO_EXPENSE_CATEGORIES = [
 ] as const;
 
 export type QboCategory = typeof QBO_EXPENSE_CATEGORIES[number];
-
 export const DEPOSIT_DECISIONS = ["Tenant", "Landlord", "Pending", "NA"] as const;
 export type DepositDecision = typeof DEPOSIT_DECISIONS[number];
 
 // Maintenance Photos
-export const maintenancePhotos = sqliteTable("maintenance_photos", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
+export const maintenancePhotos = pgTable("maintenance_photos", {
+  id: serial("id").primaryKey(),
   maintenanceRequestId: integer("maintenance_request_id").notNull(),
-  filename: text("filename").notNull(),      // stored filename on disk
-  originalName: text("original_name"),       // original filename from device
+  filename: text("filename").notNull(),
+  originalName: text("original_name"),
   uploadedAt: text("uploaded_at").notNull(),
   caption: text("caption"),
 });

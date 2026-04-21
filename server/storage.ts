@@ -1,5 +1,5 @@
-import { drizzle } from "drizzle-orm/better-sqlite3";
-import Database from "better-sqlite3";
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 import { eq, and, desc } from "drizzle-orm";
 import {
   properties, tenants, deposits, depositEntries,
@@ -14,312 +14,295 @@ import {
   type MaintenancePhoto, type InsertMaintenancePhoto,
 } from "@shared/schema";
 
-const sqlite = new Database("propmanager.db");
-const db = drizzle(sqlite);
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL?.includes("railway") ? { rejectUnauthorized: false } : false,
+});
 
-// Run migrations inline
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS properties (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    address TEXT NOT NULL,
-    city TEXT NOT NULL,
-    state TEXT NOT NULL,
-    zip TEXT NOT NULL,
-    unit_count INTEGER DEFAULT 1,
-    notes TEXT
-  );
-  CREATE TABLE IF NOT EXISTS tenants (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    property_id INTEGER NOT NULL,
-    name TEXT NOT NULL,
-    email TEXT,
-    phone TEXT,
-    unit_number TEXT,
-    lease_start TEXT,
-    lease_end TEXT,
-    move_out_date TEXT,
-    forwarding_address TEXT,
-    portal_code TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active'
-  );
-  CREATE TABLE IF NOT EXISTS deposits (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tenant_id INTEGER NOT NULL,
-    property_id INTEGER NOT NULL,
-    amount REAL NOT NULL,
-    date_received TEXT NOT NULL,
-    bank_name TEXT,
-    interest_rate REAL DEFAULT 0.01,
-    state TEXT NOT NULL,
-    status TEXT DEFAULT 'held'
-  );
-  CREATE TABLE IF NOT EXISTS deposit_entries (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    deposit_id INTEGER NOT NULL,
-    date TEXT NOT NULL,
-    entry_type TEXT NOT NULL,
-    description TEXT,
-    location TEXT,
-    deduction REAL,
-    addition REAL,
-    running_balance REAL,
-    receipt_notes TEXT
-  );
-  CREATE TABLE IF NOT EXISTS inspections (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tenant_id INTEGER NOT NULL,
-    property_id INTEGER NOT NULL,
-    type TEXT NOT NULL,
-    inspection_date TEXT NOT NULL,
-    inspector_name TEXT,
-    notes TEXT,
-    total_estimated_cost REAL DEFAULT 0,
-    imported_from TEXT,
-    raw_import_data TEXT
-  );
-  CREATE TABLE IF NOT EXISTS inspection_items (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    inspection_id INTEGER NOT NULL,
-    area TEXT NOT NULL,
-    item TEXT NOT NULL,
-    condition TEXT,
-    notes TEXT,
-    has_damage INTEGER DEFAULT 0,
-    estimated_repair_cost REAL DEFAULT 0,
-    photo_notes TEXT
-  );
-  CREATE TABLE IF NOT EXISTS maintenance_requests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    tenant_id INTEGER NOT NULL,
-    property_id INTEGER NOT NULL,
-    submitted_at TEXT NOT NULL,
-    category TEXT NOT NULL,
-    urgency TEXT NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    location TEXT,
-    status TEXT NOT NULL DEFAULT 'open',
-    landlord_notes TEXT,
-    resolved_at TEXT
-  );
-`);
+const db = drizzle(pool);
 
-// Photos table
-sqlite.exec(`
-  CREATE TABLE IF NOT EXISTS maintenance_photos (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    maintenance_request_id INTEGER NOT NULL,
-    filename TEXT NOT NULL,
-    original_name TEXT,
-    uploaded_at TEXT NOT NULL,
-    caption TEXT
-  );
-`);
-
-// Phase 2 migrations — add new resolution columns if not already present
-const existingCols = sqlite.prepare(`PRAGMA table_info(maintenance_requests)`).all() as { name: string }[];
-const existingColNames = existingCols.map(c => c.name);
-const phase2Cols: [string, string][] = [
-  ["completion_cost", "REAL"],
-  ["contract_state", "TEXT"],
-  ["contract_page", "TEXT"],
-  ["contract_section", "TEXT"],
-  ["contract_subsection", "TEXT"],
-  ["contract_relevant_text", "TEXT"],
-  ["deposit_decision", "TEXT"],
-  ["deposit_amount", "REAL"],
-  ["qbo_category", "TEXT"],
-  ["qbo_expense_id", "TEXT"],
-  ["resolution_notes", "TEXT"],
-];
-for (const [col, type] of phase2Cols) {
-  if (!existingColNames.includes(col)) {
-    sqlite.exec(`ALTER TABLE maintenance_requests ADD COLUMN ${col} ${type}`);
-  }
+// Create all tables on startup
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS properties (
+      id SERIAL PRIMARY KEY,
+      address TEXT NOT NULL,
+      city TEXT NOT NULL,
+      state TEXT NOT NULL,
+      zip TEXT NOT NULL,
+      unit_count INTEGER DEFAULT 1,
+      notes TEXT
+    );
+    CREATE TABLE IF NOT EXISTS tenants (
+      id SERIAL PRIMARY KEY,
+      property_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      email TEXT,
+      phone TEXT,
+      unit_number TEXT,
+      lease_start TEXT,
+      lease_end TEXT,
+      move_out_date TEXT,
+      forwarding_address TEXT,
+      portal_code TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'active'
+    );
+    CREATE TABLE IF NOT EXISTS deposits (
+      id SERIAL PRIMARY KEY,
+      tenant_id INTEGER NOT NULL,
+      property_id INTEGER NOT NULL,
+      amount REAL NOT NULL,
+      date_received TEXT NOT NULL,
+      bank_name TEXT,
+      interest_rate REAL DEFAULT 0.01,
+      state TEXT NOT NULL,
+      status TEXT DEFAULT 'held'
+    );
+    CREATE TABLE IF NOT EXISTS deposit_entries (
+      id SERIAL PRIMARY KEY,
+      deposit_id INTEGER NOT NULL,
+      date TEXT NOT NULL,
+      entry_type TEXT NOT NULL,
+      description TEXT,
+      location TEXT,
+      deduction REAL,
+      addition REAL,
+      running_balance REAL,
+      receipt_notes TEXT
+    );
+    CREATE TABLE IF NOT EXISTS inspections (
+      id SERIAL PRIMARY KEY,
+      tenant_id INTEGER NOT NULL,
+      property_id INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      inspection_date TEXT NOT NULL,
+      inspector_name TEXT,
+      notes TEXT,
+      total_estimated_cost REAL DEFAULT 0,
+      imported_from TEXT,
+      raw_import_data TEXT
+    );
+    CREATE TABLE IF NOT EXISTS inspection_items (
+      id SERIAL PRIMARY KEY,
+      inspection_id INTEGER NOT NULL,
+      area TEXT NOT NULL,
+      item TEXT NOT NULL,
+      condition TEXT,
+      notes TEXT,
+      has_damage INTEGER DEFAULT 0,
+      estimated_repair_cost REAL DEFAULT 0,
+      photo_notes TEXT
+    );
+    CREATE TABLE IF NOT EXISTS maintenance_requests (
+      id SERIAL PRIMARY KEY,
+      tenant_id INTEGER NOT NULL,
+      property_id INTEGER NOT NULL,
+      submitted_at TEXT NOT NULL,
+      category TEXT NOT NULL,
+      urgency TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT NOT NULL,
+      location TEXT,
+      status TEXT NOT NULL DEFAULT 'open',
+      landlord_notes TEXT,
+      resolved_at TEXT,
+      completion_cost REAL,
+      contract_state TEXT,
+      contract_page TEXT,
+      contract_section TEXT,
+      contract_subsection TEXT,
+      contract_relevant_text TEXT,
+      deposit_decision TEXT,
+      deposit_amount REAL,
+      qbo_category TEXT,
+      qbo_expense_id TEXT,
+      resolution_notes TEXT
+    );
+    CREATE TABLE IF NOT EXISTS maintenance_photos (
+      id SERIAL PRIMARY KEY,
+      maintenance_request_id INTEGER NOT NULL,
+      filename TEXT NOT NULL,
+      original_name TEXT,
+      uploaded_at TEXT NOT NULL,
+      caption TEXT
+    );
+  `);
 }
+
+// Initialize on load
+initDb().catch(console.error);
 
 export interface IStorage {
-  // Properties
-  getProperties(): Property[];
-  getProperty(id: number): Property | undefined;
-  createProperty(data: InsertProperty): Property;
-  updateProperty(id: number, data: Partial<InsertProperty>): Property | undefined;
-  deleteProperty(id: number): void;
+  getProperties(): Promise<Property[]>;
+  getProperty(id: number): Promise<Property | undefined>;
+  createProperty(data: InsertProperty): Promise<Property>;
+  updateProperty(id: number, data: Partial<InsertProperty>): Promise<Property | undefined>;
+  deleteProperty(id: number): Promise<void>;
 
-  // Tenants
-  getTenants(propertyId?: number): Tenant[];
-  getTenant(id: number): Tenant | undefined;
-  getTenantByPortalCode(code: string): Tenant | undefined;
-  createTenant(data: InsertTenant): Tenant;
-  updateTenant(id: number, data: Partial<InsertTenant>): Tenant | undefined;
+  getTenants(propertyId?: number): Promise<Tenant[]>;
+  getTenant(id: number): Promise<Tenant | undefined>;
+  getTenantByPortalCode(code: string): Promise<Tenant | undefined>;
+  createTenant(data: InsertTenant): Promise<Tenant>;
+  updateTenant(id: number, data: Partial<InsertTenant>): Promise<Tenant | undefined>;
 
-  // Deposits
-  getDeposits(tenantId?: number): Deposit[];
-  getDeposit(id: number): Deposit | undefined;
-  getDepositByTenant(tenantId: number): Deposit | undefined;
-  createDeposit(data: InsertDeposit): Deposit;
-  updateDeposit(id: number, data: Partial<InsertDeposit>): Deposit | undefined;
+  getDeposits(tenantId?: number): Promise<Deposit[]>;
+  getDeposit(id: number): Promise<Deposit | undefined>;
+  getDepositByTenant(tenantId: number): Promise<Deposit | undefined>;
+  createDeposit(data: InsertDeposit): Promise<Deposit>;
+  updateDeposit(id: number, data: Partial<InsertDeposit>): Promise<Deposit | undefined>;
 
-  // Deposit Entries
-  getDepositEntries(depositId: number): DepositEntry[];
-  createDepositEntry(data: InsertDepositEntry): DepositEntry;
-  updateDepositEntry(id: number, data: Partial<InsertDepositEntry>): DepositEntry | undefined;
-  deleteDepositEntry(id: number): void;
+  getDepositEntries(depositId: number): Promise<DepositEntry[]>;
+  createDepositEntry(data: InsertDepositEntry): Promise<DepositEntry>;
+  updateDepositEntry(id: number, data: Partial<InsertDepositEntry>): Promise<DepositEntry | undefined>;
+  deleteDepositEntry(id: number): Promise<void>;
 
-  // Inspections
-  getInspections(propertyId?: number, tenantId?: number): Inspection[];
-  getInspection(id: number): Inspection | undefined;
-  createInspection(data: InsertInspection): Inspection;
-  updateInspection(id: number, data: Partial<InsertInspection>): Inspection | undefined;
+  getInspections(propertyId?: number, tenantId?: number): Promise<Inspection[]>;
+  getInspection(id: number): Promise<Inspection | undefined>;
+  createInspection(data: InsertInspection): Promise<Inspection>;
+  updateInspection(id: number, data: Partial<InsertInspection>): Promise<Inspection | undefined>;
 
-  // Inspection Items
-  getInspectionItems(inspectionId: number): InspectionItem[];
-  createInspectionItem(data: InsertInspectionItem): InspectionItem;
-  updateInspectionItem(id: number, data: Partial<InsertInspectionItem>): InspectionItem | undefined;
-  deleteInspectionItem(id: number): void;
-  bulkCreateInspectionItems(items: InsertInspectionItem[]): InspectionItem[];
+  getInspectionItems(inspectionId: number): Promise<InspectionItem[]>;
+  createInspectionItem(data: InsertInspectionItem): Promise<InspectionItem>;
+  updateInspectionItem(id: number, data: Partial<InsertInspectionItem>): Promise<InspectionItem | undefined>;
+  deleteInspectionItem(id: number): Promise<void>;
+  bulkCreateInspectionItems(items: InsertInspectionItem[]): Promise<InspectionItem[]>;
 
-  // Maintenance Requests
-  getMaintenanceRequests(propertyId?: number, tenantId?: number): MaintenanceRequest[];
-  getMaintenanceRequest(id: number): MaintenanceRequest | undefined;
-  createMaintenanceRequest(data: InsertMaintenanceRequest): MaintenanceRequest;
-  updateMaintenanceRequest(id: number, data: Partial<InsertMaintenanceRequest>): MaintenanceRequest | undefined;
+  getMaintenanceRequests(propertyId?: number, tenantId?: number): Promise<MaintenanceRequest[]>;
+  getMaintenanceRequest(id: number): Promise<MaintenanceRequest | undefined>;
+  createMaintenanceRequest(data: InsertMaintenanceRequest): Promise<MaintenanceRequest>;
+  updateMaintenanceRequest(id: number, data: Partial<InsertMaintenanceRequest>): Promise<MaintenanceRequest | undefined>;
 
-  // Maintenance Photos
-  getMaintenancePhotos(maintenanceRequestId: number): MaintenancePhoto[];
-  createMaintenancePhoto(data: InsertMaintenancePhoto): MaintenancePhoto;
-  deleteMaintenancePhoto(id: number): void;
+  getMaintenancePhotos(maintenanceRequestId: number): Promise<MaintenancePhoto[]>;
+  createMaintenancePhoto(data: InsertMaintenancePhoto): Promise<MaintenancePhoto>;
+  deleteMaintenancePhoto(id: number): Promise<void>;
 }
 
-export class SqliteStorage implements IStorage {
-  getProperties(): Property[] {
-    return db.select().from(properties).all();
+export class PgStorage implements IStorage {
+  async getProperties(): Promise<Property[]> {
+    return db.select().from(properties);
   }
-  getProperty(id: number): Property | undefined {
-    return db.select().from(properties).where(eq(properties.id, id)).get();
+  async getProperty(id: number): Promise<Property | undefined> {
+    return db.select().from(properties).where(eq(properties.id, id)).then(r => r[0]);
   }
-  createProperty(data: InsertProperty): Property {
-    return db.insert(properties).values(data).returning().get();
+  async createProperty(data: InsertProperty): Promise<Property> {
+    return db.insert(properties).values(data).returning().then(r => r[0]);
   }
-  updateProperty(id: number, data: Partial<InsertProperty>): Property | undefined {
-    return db.update(properties).set(data).where(eq(properties.id, id)).returning().get();
+  async updateProperty(id: number, data: Partial<InsertProperty>): Promise<Property | undefined> {
+    return db.update(properties).set(data).where(eq(properties.id, id)).returning().then(r => r[0]);
   }
-  deleteProperty(id: number): void {
-    db.delete(properties).where(eq(properties.id, id)).run();
-  }
-
-  getTenants(propertyId?: number): Tenant[] {
-    if (propertyId) {
-      return db.select().from(tenants).where(eq(tenants.propertyId, propertyId)).all();
-    }
-    return db.select().from(tenants).all();
-  }
-  getTenant(id: number): Tenant | undefined {
-    return db.select().from(tenants).where(eq(tenants.id, id)).get();
-  }
-  getTenantByPortalCode(code: string): Tenant | undefined {
-    return db.select().from(tenants).where(eq(tenants.portalCode, code)).get();
-  }
-  createTenant(data: InsertTenant): Tenant {
-    return db.insert(tenants).values(data).returning().get();
-  }
-  updateTenant(id: number, data: Partial<InsertTenant>): Tenant | undefined {
-    return db.update(tenants).set(data).where(eq(tenants.id, id)).returning().get();
+  async deleteProperty(id: number): Promise<void> {
+    await db.delete(properties).where(eq(properties.id, id));
   }
 
-  getDeposits(tenantId?: number): Deposit[] {
-    if (tenantId) {
-      return db.select().from(deposits).where(eq(deposits.tenantId, tenantId)).all();
-    }
-    return db.select().from(deposits).all();
+  async getTenants(propertyId?: number): Promise<Tenant[]> {
+    if (propertyId) return db.select().from(tenants).where(eq(tenants.propertyId, propertyId));
+    return db.select().from(tenants);
   }
-  getDeposit(id: number): Deposit | undefined {
-    return db.select().from(deposits).where(eq(deposits.id, id)).get();
+  async getTenant(id: number): Promise<Tenant | undefined> {
+    return db.select().from(tenants).where(eq(tenants.id, id)).then(r => r[0]);
   }
-  getDepositByTenant(tenantId: number): Deposit | undefined {
-    return db.select().from(deposits).where(eq(deposits.tenantId, tenantId)).get();
+  async getTenantByPortalCode(code: string): Promise<Tenant | undefined> {
+    return db.select().from(tenants).where(eq(tenants.portalCode, code)).then(r => r[0]);
   }
-  createDeposit(data: InsertDeposit): Deposit {
-    return db.insert(deposits).values(data).returning().get();
+  async createTenant(data: InsertTenant): Promise<Tenant> {
+    return db.insert(tenants).values(data).returning().then(r => r[0]);
   }
-  updateDeposit(id: number, data: Partial<InsertDeposit>): Deposit | undefined {
-    return db.update(deposits).set(data).where(eq(deposits.id, id)).returning().get();
+  async updateTenant(id: number, data: Partial<InsertTenant>): Promise<Tenant | undefined> {
+    return db.update(tenants).set(data).where(eq(tenants.id, id)).returning().then(r => r[0]);
   }
 
-  getDepositEntries(depositId: number): DepositEntry[] {
-    return db.select().from(depositEntries).where(eq(depositEntries.depositId, depositId)).all();
+  async getDeposits(tenantId?: number): Promise<Deposit[]> {
+    if (tenantId) return db.select().from(deposits).where(eq(deposits.tenantId, tenantId));
+    return db.select().from(deposits);
   }
-  createDepositEntry(data: InsertDepositEntry): DepositEntry {
-    return db.insert(depositEntries).values(data).returning().get();
+  async getDeposit(id: number): Promise<Deposit | undefined> {
+    return db.select().from(deposits).where(eq(deposits.id, id)).then(r => r[0]);
   }
-  updateDepositEntry(id: number, data: Partial<InsertDepositEntry>): DepositEntry | undefined {
-    return db.update(depositEntries).set(data).where(eq(depositEntries.id, id)).returning().get();
+  async getDepositByTenant(tenantId: number): Promise<Deposit | undefined> {
+    return db.select().from(deposits).where(eq(deposits.tenantId, tenantId)).then(r => r[0]);
   }
-  deleteDepositEntry(id: number): void {
-    db.delete(depositEntries).where(eq(depositEntries.id, id)).run();
+  async createDeposit(data: InsertDeposit): Promise<Deposit> {
+    return db.insert(deposits).values(data).returning().then(r => r[0]);
+  }
+  async updateDeposit(id: number, data: Partial<InsertDeposit>): Promise<Deposit | undefined> {
+    return db.update(deposits).set(data).where(eq(deposits.id, id)).returning().then(r => r[0]);
   }
 
-  getInspections(propertyId?: number, tenantId?: number): Inspection[] {
+  async getDepositEntries(depositId: number): Promise<DepositEntry[]> {
+    return db.select().from(depositEntries).where(eq(depositEntries.depositId, depositId));
+  }
+  async createDepositEntry(data: InsertDepositEntry): Promise<DepositEntry> {
+    return db.insert(depositEntries).values(data).returning().then(r => r[0]);
+  }
+  async updateDepositEntry(id: number, data: Partial<InsertDepositEntry>): Promise<DepositEntry | undefined> {
+    return db.update(depositEntries).set(data).where(eq(depositEntries.id, id)).returning().then(r => r[0]);
+  }
+  async deleteDepositEntry(id: number): Promise<void> {
+    await db.delete(depositEntries).where(eq(depositEntries.id, id));
+  }
+
+  async getInspections(propertyId?: number, tenantId?: number): Promise<Inspection[]> {
     if (propertyId && tenantId) {
-      return db.select().from(inspections).where(and(eq(inspections.propertyId, propertyId), eq(inspections.tenantId, tenantId))).all();
+      return db.select().from(inspections).where(and(eq(inspections.propertyId, propertyId), eq(inspections.tenantId, tenantId)));
     }
-    if (propertyId) return db.select().from(inspections).where(eq(inspections.propertyId, propertyId)).all();
-    if (tenantId) return db.select().from(inspections).where(eq(inspections.tenantId, tenantId)).all();
-    return db.select().from(inspections).all();
+    if (propertyId) return db.select().from(inspections).where(eq(inspections.propertyId, propertyId));
+    if (tenantId) return db.select().from(inspections).where(eq(inspections.tenantId, tenantId));
+    return db.select().from(inspections);
   }
-  getInspection(id: number): Inspection | undefined {
-    return db.select().from(inspections).where(eq(inspections.id, id)).get();
+  async getInspection(id: number): Promise<Inspection | undefined> {
+    return db.select().from(inspections).where(eq(inspections.id, id)).then(r => r[0]);
   }
-  createInspection(data: InsertInspection): Inspection {
-    return db.insert(inspections).values(data).returning().get();
+  async createInspection(data: InsertInspection): Promise<Inspection> {
+    return db.insert(inspections).values(data).returning().then(r => r[0]);
   }
-  updateInspection(id: number, data: Partial<InsertInspection>): Inspection | undefined {
-    return db.update(inspections).set(data).where(eq(inspections.id, id)).returning().get();
-  }
-
-  getInspectionItems(inspectionId: number): InspectionItem[] {
-    return db.select().from(inspectionItems).where(eq(inspectionItems.inspectionId, inspectionId)).all();
-  }
-  createInspectionItem(data: InsertInspectionItem): InspectionItem {
-    return db.insert(inspectionItems).values(data).returning().get();
-  }
-  updateInspectionItem(id: number, data: Partial<InsertInspectionItem>): InspectionItem | undefined {
-    return db.update(inspectionItems).set(data).where(eq(inspectionItems.id, id)).returning().get();
-  }
-  deleteInspectionItem(id: number): void {
-    db.delete(inspectionItems).where(eq(inspectionItems.id, id)).run();
-  }
-  bulkCreateInspectionItems(items: InsertInspectionItem[]): InspectionItem[] {
-    return items.map(item => db.insert(inspectionItems).values(item).returning().get());
+  async updateInspection(id: number, data: Partial<InsertInspection>): Promise<Inspection | undefined> {
+    return db.update(inspections).set(data).where(eq(inspections.id, id)).returning().then(r => r[0]);
   }
 
-  getMaintenanceRequests(propertyId?: number, tenantId?: number): MaintenanceRequest[] {
+  async getInspectionItems(inspectionId: number): Promise<InspectionItem[]> {
+    return db.select().from(inspectionItems).where(eq(inspectionItems.inspectionId, inspectionId));
+  }
+  async createInspectionItem(data: InsertInspectionItem): Promise<InspectionItem> {
+    return db.insert(inspectionItems).values(data).returning().then(r => r[0]);
+  }
+  async updateInspectionItem(id: number, data: Partial<InsertInspectionItem>): Promise<InspectionItem | undefined> {
+    return db.update(inspectionItems).set(data).where(eq(inspectionItems.id, id)).returning().then(r => r[0]);
+  }
+  async deleteInspectionItem(id: number): Promise<void> {
+    await db.delete(inspectionItems).where(eq(inspectionItems.id, id));
+  }
+  async bulkCreateInspectionItems(items: InsertInspectionItem[]): Promise<InspectionItem[]> {
+    if (!items.length) return [];
+    return db.insert(inspectionItems).values(items).returning();
+  }
+
+  async getMaintenanceRequests(propertyId?: number, tenantId?: number): Promise<MaintenanceRequest[]> {
     if (propertyId && tenantId) {
-      return db.select().from(maintenanceRequests).where(and(eq(maintenanceRequests.propertyId, propertyId), eq(maintenanceRequests.tenantId, tenantId))).orderBy(desc(maintenanceRequests.submittedAt)).all();
+      return db.select().from(maintenanceRequests).where(and(eq(maintenanceRequests.propertyId, propertyId), eq(maintenanceRequests.tenantId, tenantId))).orderBy(desc(maintenanceRequests.submittedAt));
     }
-    if (propertyId) return db.select().from(maintenanceRequests).where(eq(maintenanceRequests.propertyId, propertyId)).orderBy(desc(maintenanceRequests.submittedAt)).all();
-    if (tenantId) return db.select().from(maintenanceRequests).where(eq(maintenanceRequests.tenantId, tenantId)).orderBy(desc(maintenanceRequests.submittedAt)).all();
-    return db.select().from(maintenanceRequests).orderBy(desc(maintenanceRequests.submittedAt)).all();
+    if (propertyId) return db.select().from(maintenanceRequests).where(eq(maintenanceRequests.propertyId, propertyId)).orderBy(desc(maintenanceRequests.submittedAt));
+    if (tenantId) return db.select().from(maintenanceRequests).where(eq(maintenanceRequests.tenantId, tenantId)).orderBy(desc(maintenanceRequests.submittedAt));
+    return db.select().from(maintenanceRequests).orderBy(desc(maintenanceRequests.submittedAt));
   }
-  getMaintenanceRequest(id: number): MaintenanceRequest | undefined {
-    return db.select().from(maintenanceRequests).where(eq(maintenanceRequests.id, id)).get();
+  async getMaintenanceRequest(id: number): Promise<MaintenanceRequest | undefined> {
+    return db.select().from(maintenanceRequests).where(eq(maintenanceRequests.id, id)).then(r => r[0]);
   }
-  createMaintenanceRequest(data: InsertMaintenanceRequest): MaintenanceRequest {
-    return db.insert(maintenanceRequests).values(data).returning().get();
+  async createMaintenanceRequest(data: InsertMaintenanceRequest): Promise<MaintenanceRequest> {
+    return db.insert(maintenanceRequests).values(data).returning().then(r => r[0]);
   }
-  updateMaintenanceRequest(id: number, data: Partial<InsertMaintenanceRequest>): MaintenanceRequest | undefined {
-    return db.update(maintenanceRequests).set(data).where(eq(maintenanceRequests.id, id)).returning().get();
+  async updateMaintenanceRequest(id: number, data: Partial<InsertMaintenanceRequest>): Promise<MaintenanceRequest | undefined> {
+    return db.update(maintenanceRequests).set(data).where(eq(maintenanceRequests.id, id)).returning().then(r => r[0]);
   }
 
-  getMaintenancePhotos(maintenanceRequestId: number): MaintenancePhoto[] {
-    return db.select().from(maintenancePhotos).where(eq(maintenancePhotos.maintenanceRequestId, maintenanceRequestId)).all();
+  async getMaintenancePhotos(maintenanceRequestId: number): Promise<MaintenancePhoto[]> {
+    return db.select().from(maintenancePhotos).where(eq(maintenancePhotos.maintenanceRequestId, maintenanceRequestId));
   }
-  createMaintenancePhoto(data: InsertMaintenancePhoto): MaintenancePhoto {
-    return db.insert(maintenancePhotos).values(data).returning().get();
+  async createMaintenancePhoto(data: InsertMaintenancePhoto): Promise<MaintenancePhoto> {
+    return db.insert(maintenancePhotos).values(data).returning().then(r => r[0]);
   }
-  deleteMaintenancePhoto(id: number): void {
-    db.delete(maintenancePhotos).where(eq(maintenancePhotos.id, id)).run();
+  async deleteMaintenancePhoto(id: number): Promise<void> {
+    await db.delete(maintenancePhotos).where(eq(maintenancePhotos.id, id));
   }
 }
 
-export const storage = new SqliteStorage();
+export const storage = new PgStorage();
