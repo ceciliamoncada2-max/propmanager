@@ -13,7 +13,7 @@ export const properties = pgTable("properties", {
   notes: text("notes"),
 });
 
-export const insertPropertySchema = createInsertSchema(properties).omit({ id: true });
+export const insertPropertySchema = createInsertSchema(properties).omit({ id: true, unitCount: true }).extend({ unitCount: z.number().optional() });
 export type InsertProperty = z.infer<typeof insertPropertySchema>;
 export type Property = typeof properties.$inferSelect;
 
