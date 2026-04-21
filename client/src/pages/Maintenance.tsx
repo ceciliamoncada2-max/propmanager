@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Wrench, Search, FileText, DollarSign, BookOpen, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Calendar, ThumbsUp, RefreshCw, X } from "lucide-react";
+import { Wrench, Search, FileText, DollarSign, BookOpen, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Calendar, ThumbsUp, RefreshCw, X, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -391,6 +391,51 @@ export default function Maintenance() {
                 </div>
               )}
 
+              {/* ── Repair Visit Date ── PROMINENT TOP SECTION ── */}
+              <div className="rounded-xl border-2 border-primary/30 bg-primary/5 p-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <Calendar size={16} className="text-primary" />
+                  <span className="font-semibold text-sm">Set Repair Visit Date</span>
+                  <span className="text-xs text-muted-foreground font-normal">(tenant confirms via portal)</span>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Pick the date you plan to complete the repair. The tenant will receive a text and see a <strong>Confirm / Reschedule</strong> button in their portal.
+                </p>
+                <Input
+                  type="datetime-local"
+                  value={scheduledVisit}
+                  onChange={e => setScheduledVisit(e.target.value)}
+                  data-testid="input-scheduled-visit"
+                  className="bg-background"
+                />
+
+                {/* Confirmation status — shown after tenant responds */}
+                {selectedReq?.visitConfirmed === "confirmed" && (
+                  <div className="mt-3 flex items-center gap-2 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700 px-3 py-2">
+                    <ThumbsUp size={14} className="text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    <span className="text-xs font-semibold text-emerald-700 dark:text-emerald-300">Tenant confirmed this visit date</span>
+                  </div>
+                )}
+                {!selectedReq?.visitConfirmed && scheduledVisit && (
+                  <p className="mt-2 text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                    <Clock size={11} /> Waiting for tenant confirmation
+                  </p>
+                )}
+                {selectedReq?.visitConfirmed?.startsWith?.("reschedule:") && (() => {
+                  const msg = selectedReq.visitConfirmed.replace(/^reschedule:/, "").trim();
+                  return (
+                    <div className="mt-3 rounded-lg border border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 p-2.5">
+                      <div className="flex items-center gap-1.5 mb-0.5">
+                        <RefreshCw size={12} className="text-orange-500" />
+                        <span className="text-xs font-semibold text-orange-700 dark:text-orange-300">Tenant requested a reschedule</span>
+                      </div>
+                      {msg && <p className="text-xs text-orange-600 dark:text-orange-400 mt-0.5">Their message: "{msg}"</p>}
+                      <p className="text-xs text-muted-foreground mt-1">Update the date above and save — the tenant will be notified of the new date.</p>
+                    </div>
+                  );
+                })()}
+              </div>
+
               {/* Status & basic notes */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -412,36 +457,6 @@ export default function Maintenance() {
                     data-testid="input-completion-cost"
                   />
                 </div>
-              </div>
-
-              <div>
-                <Label>Scheduled Visit <span className="text-muted-foreground font-normal text-xs">(tenant will be notified by text)</span></Label>
-                <Input
-                  type="datetime-local"
-                  value={scheduledVisit}
-                  onChange={e => setScheduledVisit(e.target.value)}
-                  data-testid="input-scheduled-visit"
-                />
-                {/* Visit confirmation status badge */}
-                {selectedReq?.visitConfirmed === "confirmed" && (
-                  <div className="mt-2 flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
-                    <ThumbsUp size={13} />
-                    <span className="text-xs font-medium">Tenant confirmed this visit</span>
-                  </div>
-                )}
-                {selectedReq?.visitConfirmed?.startsWith?.("reschedule:") && (() => {
-                  const msg = selectedReq.visitConfirmed.replace(/^reschedule:/, "").trim();
-                  return (
-                    <div className="mt-2 rounded-lg border border-orange-200 dark:border-orange-700 bg-orange-50 dark:bg-orange-900/20 p-2.5">
-                      <div className="flex items-center gap-1.5 mb-0.5">
-                        <RefreshCw size={12} className="text-orange-500" />
-                        <span className="text-xs font-semibold text-orange-700 dark:text-orange-300">Tenant requested reschedule</span>
-                      </div>
-                      {msg && <p className="text-xs text-orange-600 dark:text-orange-400">Message: "{msg}"</p>}
-                      <p className="text-xs text-muted-foreground mt-1">Update the date above and save to notify the tenant.</p>
-                    </div>
-                  );
-                })()}
               </div>
               <div>
                 <Label>Landlord Notes</Label>
