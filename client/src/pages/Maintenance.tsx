@@ -53,6 +53,7 @@ export default function Maintenance() {
   // Resolution section (Phase 2)
   const [showResolution, setShowResolution] = useState(false);
   const [completionCost, setCompletionCost] = useState("");
+  const [scheduledVisit, setScheduledVisit] = useState("");
   const [contractState, setContractState] = useState("TX");
   const [contractPage, setContractPage] = useState("");
   const [contractSection, setContractSection] = useState("");
@@ -105,6 +106,7 @@ export default function Maintenance() {
     setNewStatus(r.status);
     setLandlordNotes(r.landlordNotes || "");
     setCompletionCost(r.completionCost != null ? String(r.completionCost) : "");
+    setScheduledVisit((r as any).scheduledVisit || "");
     setContractState(r.contractState || "TX");
     setContractPage(r.contractPage || "");
     setContractSection(r.contractSection || "");
@@ -161,6 +163,7 @@ export default function Maintenance() {
     const payload: any = {
       status: newStatus,
       landlordNotes,
+      scheduledVisit: scheduledVisit || null,
     };
     if (showResolution) {
       payload.completionCost = completionCost ? Number(completionCost) : null;
@@ -401,6 +404,15 @@ export default function Maintenance() {
                 </div>
               </div>
 
+              <div>
+                <Label>Scheduled Visit <span className="text-muted-foreground font-normal text-xs">(tenant will be notified by text)</span></Label>
+                <Input
+                  type="datetime-local"
+                  value={scheduledVisit}
+                  onChange={e => setScheduledVisit(e.target.value)}
+                  data-testid="input-scheduled-visit"
+                />
+              </div>
               <div>
                 <Label>Landlord Notes</Label>
                 <Textarea value={landlordNotes} onChange={e => setLandlordNotes(e.target.value)} rows={2} placeholder="Contractor info, work performed, timeline..." data-testid="textarea-landlord-notes" />

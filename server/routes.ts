@@ -3,6 +3,7 @@ import { type Server } from "http";
 import { storage } from "./storage";
 import { generateDepositTrackerXlsx } from "./excelExport";
 import { searchLeaseClauses, getClausesForCategory } from "./leaseReference";
+import { notifyTenantNewRequest, notifyLandlordNewRequest, notifyTenantStatusUpdate, notifyTenantResolved, notifyTenantVisitScheduled } from "./sms";
 import multer from "multer";
 import path from "path";
 import fs from "fs";
@@ -271,15 +272,39 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       ...req.body,
       submittedAt: new Date().toISOString(),
     });
-    res.json(await storage.createMaintenanceRequest(data));
+    const created = await storage.createMaintenanceRequest(data);
+    // Notify landlord of new request
+    const tenant = await storage.getTenant(created.tenantId);
+    notifyLandlordNewRequest(created.title, tenant?.name || "Tenant", created.location).catch(console.error);
+    res.json(created);
   });
   app.patch("/api/maintenance/:id", async (req, res) => {
     const body = req.body;
+    const prev = await storage.getMaintenanceRequest(Number(req.params.id));
     if (body.status === "resolved" && !body.resolvedAt) {
       body.resolvedAt = new Date().toISOString();
     }
     const r = await storage.updateMaintenanceRequest(Number(req.params.id), body);
     if (!r) return res.status(404).json({ error: "Not found" });
+    // Send SMS notifications
+    if (prev) {
+      const tenant = await storage.getTenant(r.tenantId);
+      const tenantPhone = tenant?.phone || null;
+      const tenantPhone2 = (tenant as any)?.phone2 || null;
+      const phones = [tenantPhone, tenantPhone2].filter(Boolean);
+      // Visit scheduled
+      if (body.scheduledVisit && body.scheduledVisit !== prev.scheduledVisit) {
+        phones.forEach(p => notifyTenantVisitScheduled(p, r.title, body.scheduledVisit).catch(console.error));
+      }
+      // Status changed
+      if (body.status && body.status !== prev.status) {
+        if (body.status === "resolved" || body.status === "closed") {
+          phones.forEach(p => notifyTenantResolved(p, r.title, body.landlordNotes || null).catch(console.error));
+        } else {
+          phones.forEach(p => notifyTenantStatusUpdate(p, r.title, body.status, body.landlordNotes || null, r.scheduledVisit || null).catch(console.error));
+        }
+      }
+    }
     res.json(r);
   });
 
@@ -301,7 +326,15 @@ export async function registerRoutes(httpServer: Server, app: Express): Promise<
       submittedAt: new Date().toISOString(),
       status: "open",
     });
-    res.json(await storage.createMaintenanceRequest(data));
+    const created = await storage.createMaintenanceRequest(data);
+    // Notify tenant that request was received
+    const portalTenant = await storage.getTenantByPortalCode(req.params.code);
+    if (portalTenant) {
+      const phones = [portalTenant.phone, (portalTenant as any).phone2].filter(Boolean);
+      phones.forEach((p: string) => notifyTenantNewRequest(p, created.title, portalTenant.portalCode).catch(console.error));
+      notifyLandlordNewRequest(created.title, portalTenant.name, created.location).catch(console.error);
+    }
+    res.json(created);
   });
 
   // ---- Photo Uploads ----
