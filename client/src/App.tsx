@@ -22,7 +22,7 @@ function AuthGate({ children }: { children: React.ReactNode }) {
   const [authed, setAuthed] = useState<boolean | null>(null);
 
   useEffect(() => {
-    fetch(`${API_BASE}/api/auth/check`, { credentials: "include" })
+    fetch(`${API_BASE}/api/auth/check`, { credentials: "include", cache: "no-store" })
       .then((r) => r.json())
       .then((d) => setAuthed(d.authed))
       .catch(() => setAuthed(false));
