@@ -68,6 +68,7 @@ export default function Maintenance() {
   const [leaseResults, setLeaseResults] = useState<LeaseClause[]>([]);
   const [leaseLoading, setLeaseLoading] = useState(false);
   const [suggestedClauses, setSuggestedClauses] = useState<LeaseClause[]>([]);
+  const [lightboxPhoto, setLightboxPhoto] = useState<string | null>(null);
 
   const { data: requests = [], isLoading } = useQuery<any[]>({ queryKey: ["/api/maintenance"] });
   const { data: tenants = [] } = useQuery<any[]>({ queryKey: ["/api/tenants"] });
