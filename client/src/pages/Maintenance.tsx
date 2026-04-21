@@ -1,6 +1,6 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Wrench, Search, FileText, DollarSign, BookOpen, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Calendar, ThumbsUp, RefreshCw, X, Clock } from "lucide-react";
+import { Wrench, Search, FileText, DollarSign, BookOpen, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Calendar, ThumbsUp, RefreshCw, X, Clock, Camera, ZoomIn } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
